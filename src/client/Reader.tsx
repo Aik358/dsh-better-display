@@ -13,6 +13,7 @@ import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessCon
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
 import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
+import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
 import type { ReaderGroup, TurnBoundary } from './projection.js';
 import type { BlockRenderProps, ReaderProps } from './types.js';
@@ -588,17 +589,28 @@ export function Reader(props: ReaderProps) {
     return () => scroller.removeEventListener('scroll', updateActive);
   }, [groups]);
 
-  // Navigation handler (supports loaded jump & unloaded loadThrough)
+  // Navigation handler (supports loaded jump & unloaded loadThrough).
+  // Land on the conversation scroller only — scrollIntoView also moves
+  // ancestor boxes and can lift the sticky composer after a top→bottom jump.
   const onNavigateTurn = useCallback(async (item: TimelineItem) => {
     const el = root.current;
     if (!el) return;
+    const port = scrollerOf(el);
+    const reveal = (turn: number) => {
+      const targetRow = el.querySelector<HTMLElement>(`[data-reader-turn="${turn}"]`);
+      if (!targetRow) return;
+      const last = timelineItems.at(-1);
+      if (last !== undefined && last.turn === turn) {
+        scroll.jump();
+      } else {
+        scroll.release();
+        landTurn(targetRow, port);
+      }
+      setActiveTurn(turn);
+    };
 
     if (item.anchor.kind === 'loaded') {
-      const targetRow = el.querySelector<HTMLElement>(`[data-reader-turn="${item.turn}"]`);
-      if (targetRow) {
-        targetRow.scrollIntoView({ behavior: motion ? 'smooth' : 'auto', block: 'start' });
-        setActiveTurn(item.turn);
-      }
+      reveal(item.turn);
       return;
     }
 
@@ -609,17 +621,11 @@ export function Reader(props: ReaderProps) {
       } else {
         await props.loadOlder();
       }
-      setTimeout(() => {
-        const targetRow = el.querySelector<HTMLElement>(`[data-reader-turn="${item.turn}"]`);
-        if (targetRow) {
-          targetRow.scrollIntoView({ behavior: motion ? 'smooth' : 'auto', block: 'start' });
-          setActiveTurn(item.turn);
-        }
-      }, 50);
+      setTimeout(() => { reveal(item.turn); }, 50);
     } finally {
       setBusyTurn(null);
     }
-  }, [props.loadThrough, props.loadOlder, motion]);
+  }, [props.loadThrough, props.loadOlder, scroll.jump, scroll.release, timelineItems]);
 
   const lastKey = order.at(-1);
   const lastNode = lastKey ? nodes.get(lastKey) : undefined;

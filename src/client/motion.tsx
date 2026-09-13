@@ -179,10 +179,16 @@ export function RetiringContent({ visible, children }: { visible: boolean; child
 }
 
 // DOM-only behavior: the native Session remains the sole source of business data.
-export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean): { detached: boolean; jump: () => void } {
+export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean): {
+  detached: boolean;
+  jump: () => void;
+  /** Stop tail-follow so a rail landing is not pulled back to the live bottom. */
+  release: () => void;
+} {
   const port = useRef<HTMLElement | null>(null);
   const following = useRef(true);
   const anchor = useRef<{ element: HTMLElement; top: number } | null>(null);
+  const cancelFollow = useRef<() => void>(() => {});
   const [detached, setDetached] = useState(false);
   useLayoutEffect(() => {
     const content = root.current;
@@ -192,6 +198,11 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     let followFrame = 0;
     let lastFrameAt = 0;
     let lastWrittenTop: number | null = null;
+    cancelFollow.current = () => {
+      cancelAnimationFrame(followFrame);
+      followFrame = 0;
+      lastWrittenTop = null;
+    };
     const selected = () => {
       const selection = document.getSelection();
       return selection && !selection.isCollapsed && selection.anchorNode && content.contains(selection.anchorNode);
@@ -267,6 +278,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     };
   }, [root, motion]);
   const jump = useCallback(() => {
+    cancelFollow.current();
     anchor.current = null;
     following.current = true;
     setDetached(false);
@@ -274,5 +286,11 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       port.current.scrollTop = port.current.scrollHeight;
     }
   }, []);
-  return { detached, jump };
+  const release = useCallback(() => {
+    cancelFollow.current();
+    following.current = false;
+    anchor.current = null;
+    setDetached(true);
+  }, []);
+  return { detached, jump, release };
 }

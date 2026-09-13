@@ -30,7 +30,7 @@ export function dirname(path: string): string {
  * The produced-files chip row waits for turn close. Live writes still
  * accumulate, but the row must not interrupt an in-progress process.
  */
-export function showDeliverablesRow(status: 'open' | 'closed', paths: readonly string[]): boolean {
+export function showDeliverablesRow(status: 'open' | 'closed' | 'unknown', paths: readonly string[]): boolean {
   return status === 'closed' && paths.length > 0
 }
 

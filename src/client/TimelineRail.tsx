@@ -152,6 +152,7 @@ export const TimelineRail = memo(function TimelineRail({
         onPointerMove={onPointerMove}
         onPointerEnter={() => { pointerInsideRef.current = true; }}
         onPointerLeave={onPointerLeave}
+        onMouseDown={event => { event.preventDefault(); }}
       >
         <div
           ref={scrollerRef}
@@ -229,6 +230,7 @@ export const TimelineRail = memo(function TimelineRail({
                     aria-current={isActive ? 'true' : undefined}
                     aria-busy={isBusy ? 'true' : undefined}
                     aria-describedby={hoveredIndex === index ? previewId : undefined}
+                    onMouseDown={event => { event.preventDefault(); }}
                     onClick={(e) => {
                       e.stopPropagation();
                       onNavigate(item);
