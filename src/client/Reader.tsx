@@ -11,13 +11,17 @@ import { Disclosure, ProcessFragment, RetiringContent, StatusText, useMotionAllo
 import { StreamMotionContext } from './streaming.js';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
+import { WaitingStatus } from './WaitingStatus.js';
+import { waitingAnchor } from './waiting-clock.js';
 import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
 import { presentLiveTurn, segmentLiveTurn } from './live-turn.js';
 import type { LiveStep } from './live-turn.js';
-import { PriorChainFold } from './LiveFold.js';
+import { ChoreographedFlow, useFlowChat } from './ChoreographedFlow.js';
+import { ClosedProcessSummary } from './ClosedProcessSummary.js';
+import { StickyLane } from './StickyLane.js';
 import type { ReaderGroup, TurnBoundary } from './projection.js';
 import type { BlockRenderProps, ReaderProps } from './types.js';
 import css from './Reader.module.css';
@@ -46,64 +50,6 @@ function cleanErrorMessage(raw: string | undefined): string {
 type SeatProps = BlockRenderProps & Pick<ReaderProps, 'useChat'> & {
   nodeKey: string; boundary: TurnBoundary; pinned?: boolean; processOpen?: boolean;
 };
-
-const ProcessNode = memo(function ProcessNode({ useChat, t, nodeKey, open, motion, onRead, returnFocusTo }: Pick<ReaderProps, 'useChat' | 't'> & {
-  nodeKey: string; open: boolean; motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>;
-}) {
-  const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
-  if (!node || node.visibility === 'hidden') return null;
-  let content: ReactNode = null;
-  if (isNode(node, 'context')) content = <ContextInjectionRow {...node.data} t={t} />;
-  else if (isNode(node, 'system-prompt')) content = <details className={css.detail}><summary>系统提示词</summary><pre className={css.systemPrompt}>{node.data.text}</pre></details>;
-  else if (isNode(node, 'model-retry')) content = <JsonBlock label="模型重试记录" payload={node.data.attempts} truncatedLabel={truncatedJsonLabel} />;
-  else if (isNode(node, 'command') || isNode(node, 'manual-compaction')) content = <JsonBlock label="命令记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />;
-  return content && <ProcessFragment open={open} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>{content}</ProcessFragment>;
-});
-
-const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, partStart, motion, onRead, returnFocusTo, ...render }: SeatProps & {
-  motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>; partStart?: number; folded?: boolean;
-}) {
-  const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
-  if (!node || node.visibility === 'hidden' || !isNode(node, 'assistant-step')) return null;
-  const data = node.data;
-  const parts = assistantSegments(data.blocks);
-  const earlier = isEarlierNarration(data, boundary);
-  const hasToolCalls = data.blocks.some(block => block.kind === 'tool-call');
-  const isProcessStep = earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
-  const body = data.blocks.filter(block => block.kind !== 'reasoning' && block.kind !== 'tool-call');
-  const visible = partStart === undefined ? parts : parts.filter(part => part.start === partStart);
-  return <>{visible.map(part => {
-    const index = parts.findIndex(item => item.start === part.start);
-    const last = index === parts.length - 1;
-    return part.kind === 'reasoning'
-    ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>
-      <ReasoningCard step={data.step} active={processOpen && boundary.status === 'open' && data.step === boundary.latestStep} motion={motion} selected={pinned} onRead={onRead}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running' && last && data.blocks.at(-1)?.kind === 'reasoning'}
-          holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-      </ReasoningCard>
-    </ProcessFragment>
-    : isProcessStep ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
-      <article className={css.processCommentary}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-      </article>
-    </ProcessFragment>
-    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
-      <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-        {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
-        {last && !earlier && !folded && data.status !== 'running' && boundary.status === 'closed' && (
-          <CopyAnswer blocks={body} onFork={(() => {
-            // The fork anchor must be the durable closing message seq (same as
-            // the official turn-tail branch). AssistantChatData carries no seq
-            // of its own; passing it would fork the whole session instead.
-            const anchor = forkAnchorSeq([data.finalNode, { seq: render.forkSeq }]);
-            return render.forkAt && anchor !== undefined ? () => render.forkAt!(anchor) : undefined;
-          })()} metrics={render.metrics} />
-        )}
-      </article>
-    </RetiringContent>;
-  })}</>;
-});
 
 const CompactionDivider = memo(function CompactionDivider({ data }: {
   data: { summary?: string | null; shadowedItemCount?: number | null; shadowedTokenCount?: number | null } | null;
@@ -164,6 +110,81 @@ const CompactionDivider = memo(function CompactionDivider({ data }: {
   );
 });
 
+const ProcessNode = memo(function ProcessNode({ useChat, t, nodeKey, open, motion, onRead, returnFocusTo }: Pick<ReaderProps, 'useChat' | 't'> & {
+  nodeKey: string; open: boolean; motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>;
+}) {
+  const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
+  if (!node || node.visibility === 'hidden') return null;
+  let content: ReactNode = null;
+  if (isNode(node, 'context')) content = <ContextInjectionRow {...node.data} t={t} />;
+  else if (isNode(node, 'system-prompt')) content = <details className={css.detail}><summary>系统提示词</summary><pre className={css.systemPrompt}>{node.data.text}</pre></details>;
+  else if (isNode(node, 'model-retry')) content = <JsonBlock label="模型重试记录" payload={node.data.attempts} truncatedLabel={truncatedJsonLabel} />;
+  else if (isNode(node, 'manual-compaction')) {
+    if (node.data.command.outcome?.kind === 'error') {
+      content = <div className={css.error} role="alert">
+        <svg className={css.errorIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor">
+          <circle cx="8" cy="8" r="6.5" strokeWidth="1.2" />
+          <path d="M8 5v3.5M8 11.2h.01" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <div className={css.errorCopy}>
+          <div className={css.errorTitle}><strong>上下文压缩未成功</strong></div>
+          <p className={css.errorMessage}>{node.data.command.outcome.text}</p>
+        </div>
+      </div>;
+    } else {
+      content = node.data.compaction ? <CompactionDivider data={node.data.compaction} /> : null;
+    }
+  }
+  else if (isNode(node, 'compaction')) content = <CompactionDivider data={node.data} />;
+  else if (isNode(node, 'command')) content = <JsonBlock label="命令记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />;
+  return content && <ProcessFragment open={open} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>{content}</ProcessFragment>;
+});
+
+const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, partStart, motion, onRead, returnFocusTo, ...render }: SeatProps & {
+  motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>; partStart?: number; folded?: boolean;
+}) {
+  const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
+  if (!node || node.visibility === 'hidden' || !isNode(node, 'assistant-step')) return null;
+  const data = node.data;
+  const parts = assistantSegments(data.blocks);
+  const earlier = isEarlierNarration(data, boundary);
+  const hasToolCalls = data.blocks.some(block => block.kind === 'tool-call');
+  const isProcessStep = earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
+  const body = data.blocks.filter(block => block.kind !== 'reasoning' && block.kind !== 'tool-call');
+  const visible = partStart === undefined ? parts : parts.filter(part => part.start === partStart);
+  return <>{visible.map(part => {
+    const index = parts.findIndex(item => item.start === part.start);
+    const last = index === parts.length - 1;
+    return part.kind === 'reasoning'
+    ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>
+      <ReasoningCard step={data.step} active={processOpen && boundary.status === 'open' && data.step === boundary.latestStep} motion={motion} selected={pinned} onRead={onRead}>
+        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running' && last && data.blocks.at(-1)?.kind === 'reasoning'}
+          holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
+      </ReasoningCard>
+    </ProcessFragment>
+    : isProcessStep ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
+      <article className={css.processCommentary}>
+        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
+      </article>
+    </ProcessFragment>
+    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
+      <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
+        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
+        {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
+        {last && !earlier && !folded && data.status !== 'running' && boundary.status === 'closed' && (
+          <CopyAnswer blocks={body} onFork={(() => {
+            // The fork anchor must be the durable closing message seq (same as
+            // the official turn-tail branch). AssistantChatData carries no seq
+            // of its own; passing it would fork the whole session instead.
+            const anchor = forkAnchorSeq([data.finalNode, { seq: render.forkSeq }]);
+            return render.forkAt && anchor !== undefined ? () => render.forkAt!(anchor) : undefined;
+          })()} metrics={render.metrics} />
+        )}
+      </article>
+    </RetiringContent>;
+  })}</>;
+});
+
 const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, processOpen = false, ...render }: SeatProps) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   if (!node || node.visibility === 'hidden') return null;
@@ -215,20 +236,7 @@ const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, pr
     </div>;
     return node.data.outcome?.text ? <MarkdownText text={node.data.outcome.text} labels={markdownLabels} /> : null;
   }
-  if (isNode(node, 'manual-compaction')) {
-    if (node.data.command.outcome?.kind === 'error') return <div className={css.error} role="alert">
-      <svg className={css.errorIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor">
-        <circle cx="8" cy="8" r="6.5" strokeWidth="1.2" />
-        <path d="M8 5v3.5M8 11.2h.01" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-      <div className={css.errorCopy}>
-        <div className={css.errorTitle}><strong>上下文压缩未成功</strong></div>
-        <p className={css.errorMessage}>{node.data.command.outcome.text}</p>
-      </div>
-    </div>;
-    return node.data.compaction ? <CompactionDivider data={node.data.compaction} /> : null;
-  }
-  if (isNode(node, 'compaction')) return <CompactionDivider data={node.data} />;
+  if (isNode(node, 'manual-compaction') || isNode(node, 'compaction')) return null;
   if (node.kind === 'context' || node.kind === 'turn-tail' || node.kind === 'system-prompt' || node.kind === 'turn-process') return null;
   if ((node.kind as string) === 'command-input') {
     const data = node.data as { readonly text: string };
@@ -439,9 +447,12 @@ function DeliverablesRow({ deliverables, openFile, revealFile }: {
   );
 }
 
-const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedProcessKeys, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[] }) {
-  const nodes = props.useChat(snapshot => snapshot.nodes);
-  const turn = props.useChat(snapshot => group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn));
+const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys, selectedProcessKeys, isAwaitingModel = false, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; autoFold: boolean; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[]; isAwaitingModel?: boolean }) {
+  const snapshot = props.useChat(snapshot => snapshot);
+  const nodes = snapshot.nodes;
+  const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
+  const interaction = props.useSessionPendingInteraction(snapshot => snapshot.get(props.sessionId));
+  const sessionRunning = props.useSession(snapshot => snapshot.running);
   const boundary = useMemo(() => boundaryOf(turn), [turn]);
   const choiceKey = processChoiceKey(group.key, boundary);
   const expansionChoice = props.useStore(state => state.expanded[choiceKey]);
@@ -454,7 +465,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedP
   const mainKeys = startsWithUser ? group.keys.slice(1) : group.keys;
   const flow = useMemo(() => readerFlow({ ...group, keys: mainKeys }, turn, key => nodes.get(key)), [nodes, group, mainKeys, turn]);
   const steps = useMemo(() => segmentLiveTurn(flow, key => nodes.get(key)), [flow, nodes]);
-  const liveItems = useMemo(() => presentLiveTurn(steps, boundary), [steps, boundary]);
+  const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold), [steps, boundary, autoFold]);
   const hasProcess = flow.some(item => item.kind === 'tool' || hasProcessContent(nodes.get(item.nodeKey), boundary));
   // Only a real, still-active text selection delays folding. Merely clicking,
   // focusing or scrolling the live card does not create a permanent override.
@@ -486,8 +497,17 @@ const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedP
     endedAt: tailData?.closing?.time ?? turn?.end?.time,
   }), [tailData, runMs, turn?.end?.time]);
   const forkSeq = forkAnchorSeq([tailData?.closing?.finalNode]);
+  const presentation = useMemo(() => {
+    // ChatNodeStore exposes live keyed readers. Materialize this turn instead of
+    // retaining a live get() function and mistakenly calling it a frozen frame.
+    const captured = new Map(group.keys.flatMap(key => {
+      const node = nodes.get(key); return node ? [[key, node] as const] : [];
+    }));
+    return { items: holdingSelection ? presentLiveTurn(steps, boundary, false) : liveItems,
+      snapshot: { ...snapshot, nodes: { ...nodes, get: (key: string) => captured.get(key), values: () => [...captured.values()] } } };
+  }, [snapshot, nodes, group, steps, boundary, liveItems, holdingSelection]);
   const shared = {
-    useChat: props.useChat,
+    useChat: useFlowChat,
     renderSlotChain: props.renderSlotChain,
     loadImage: props.loadImage,
     fillComposer: props.fillComposer,
@@ -501,7 +521,8 @@ const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedP
   const terminal = terminalLabel(boundary.reason);
   const hasTurnError = flow.some(item => item.kind === 'node' && nodes.get(item.nodeKey)?.kind === 'turn-error');
   const showTerminalNotice = terminal && !hasTurnError && boundary.reason !== 'interrupted' && boundary.reason !== 'aborted';
-  const renderStep = (step: LiveStep, processOpen: boolean, folded: boolean) => {
+  const renderStep = (step: LiveStep, folded: boolean) => {
+    const processOpen = folded || expanded;
     if (step.kind === 'reasoning' || step.kind === 'body') return <BlockBoundary>
       <AssistantNode {...shared} boundary={boundary} nodeKey={step.nodeKey} partStart={step.start} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} folded={folded} motion={motion} onRead={pinProcess} returnFocusTo={processButton} />
     </BlockBoundary>;
@@ -511,31 +532,32 @@ const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedP
     </ProcessFragment></BlockBoundary>;
     if (step.kind === 'user') return <BlockBoundary><MainNode {...shared} boundary={boundary} nodeKey={step.nodeKey} /></BlockBoundary>;
     return <Fragment>
-      <BlockBoundary><ProcessNode useChat={props.useChat} t={props.t} nodeKey={step.nodeKey} open={processOpen} motion={motion} onRead={pinProcess} returnFocusTo={processButton} /></BlockBoundary>
+      <BlockBoundary><ProcessNode useChat={useFlowChat} t={props.t} nodeKey={step.nodeKey} open={processOpen} motion={motion} onRead={pinProcess} returnFocusTo={processButton} /></BlockBoundary>
       <BlockBoundary><MainNode {...shared} boundary={boundary} nodeKey={step.nodeKey} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} /></BlockBoundary>
     </Fragment>;
   };
   return <section className={css.turn} data-reader-turn={group.turn ?? 'unresolved'} data-reader-turn-state={boundary.status} data-reader-turn-result={boundary.reason ?? undefined}>
-    {startsWithUser && <BlockBoundary><MainNode {...shared} boundary={boundary} nodeKey={group.keys[0]} /></BlockBoundary>}
-    {hasProcess && <Disclosure open={expanded} onChange={setExpanded} controls={flowId} buttonRef={processButton}
-      label={<GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />} status={turn?.steps.length ? `${turn.steps.length} 个步骤` : undefined} />}
-    {!hasProcess && boundary.status === 'open' && <div className={css.disclosure} data-reader-status-only>
+    {startsWithUser && <BlockBoundary><MainNode {...shared} useChat={props.useChat} boundary={boundary} nodeKey={group.keys[0]} /></BlockBoundary>}
+    {hasProcess && !isAwaitingModel && <StickyLane kind="status" className={css.turnProcessSticky}>
+      <Disclosure open={expanded} onChange={setExpanded} controls={flowId} buttonRef={processButton}
+        label={<GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />} />
+    </StickyLane>}
+    {boundary.status === 'closed' && hasProcess && <ClosedProcessSummary open={expanded} onChange={setExpanded} controls={flowId}
+      steps={steps.filter(step => {
+        if (step.kind === 'user') return false;
+        if (step.kind !== 'body') return true;
+        const node = nodes.get(step.nodeKey);
+        return !!node && isNode(node, 'assistant-step') && (isEarlierNarration(node.data, boundary)
+          || node.data.blocks.some(block => block.kind === 'tool-call')
+          || (boundary.latestStep > 0 && node.data.step < boundary.latestStep));
+      })} />}
+    <ChoreographedFlow id={flowId} frame={presentation} motion={motion} enabled={autoFold && boundary.status === 'open' && !holdingSelection}
+      urgent={hasTurnError || interaction !== undefined || !sessionRunning} open={foldOpenByKey} processOpen={expanded}
+      onOpenChange={(key, value) => { pinProcess(); setFoldOpenByKey(current => ({ ...current, [key]: value })); }} renderStep={renderStep} />
+    {/* 状态指示永远排在流程之后：AI 的响应永远出现在最新消息（含补充消息）的下方 */}
+    {!hasProcess && boundary.status === 'open' && !isAwaitingModel && <div className={css.disclosure} data-reader-status-only>
       <GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />
     </div>}
-    <div id={flowId} className={css.mainFlow} data-reader-flow>
-      {liveItems.flatMap(item => {
-        if (item.kind === 'fold') {
-          const foldOpen = foldOpenByKey[item.key] ?? false;
-          return [
-            <PriorChainFold key={item.key} summary={item.summary} motion={motion} foldOpen={foldOpen}
-              onFoldOpenChange={value => setFoldOpenByKey(current => current[item.key] === value ? current : { ...current, [item.key]: value })}
-              processKey={item.key} processOpen={expanded} onRead={pinProcess} returnFocusTo={processButton} />,
-            ...item.steps.map(step => <Fragment key={step.key}>{renderStep(step, expanded && foldOpen, true)}</Fragment>),
-          ];
-        }
-        return [<Fragment key={item.key}>{renderStep(item.step, expanded, false)}</Fragment>];
-      })}
-    </div>
     {showDeliverablesRow(boundary.status, deliverables) && <DeliverablesRow deliverables={deliverables} openFile={props.openFile} revealFile={props.revealFile} />}
     {showTerminalNotice && <div className={css.notice} data-reader-terminal>{terminal}</div>}
   </section>;
@@ -547,16 +569,59 @@ export function Reader(props: ReaderProps) {
   const order = props.useChat(snapshot => snapshot.order);
   const nodes = props.useChat(snapshot => snapshot.nodes);
   const timeline = props.useChat(snapshot => snapshot.timeline);
+  const running = props.useSession(snapshot => snapshot.running);
   const pending = props.useSessionPendingInteraction(snapshot => snapshot.get(props.sessionId));
   const openError = props.useSession(snapshot => snapshot.openError);
   const loading = props.useSession(snapshot => snapshot.openState === 'loading');
   const hasMore = props.useSession(snapshot => snapshot.hasMore);
   const loadingOlder = props.useSession(snapshot => snapshot.loadingOlder);
   const pendingSubmissions = props.useSession(snapshot => snapshot.pendingSubmissions);
+  const waitAnchor = waitingAnchor(order, key => nodes.get(key), pendingSubmissions);
   const motionPreference = props.useStore(state => state.motion);
   const motion = useMotionAllowed(motionPreference);
+  const autoFold = props.useStore(state => state.autoFold ?? true);
   const streamMotion = useMemo(() => ({ enabled: motion, activatedAt: activatedAt.current }), [motion]);
   const groups = useMemo(() => groupNodes(order, key => nodes.get(key)), [order, nodes, timeline]);
+  const isAwaitingModel = useMemo(() => {
+    // 状态机铁律：「深度求索中」与「正在处理/思考」永远互斥。
+    // 1. 仅空闲发送（!running）的本地回显窗口：用户按下回车第 0 毫秒立即反馈。
+    //    忙碌时的 queued/steering 回显不算等待——模型本来就在工作。
+    if (!running && pendingSubmissions && pendingSubmissions.length > 0) return true;
+
+    const lastKey = order.at(-1);
+    const lastNode = lastKey ? nodes.get(lastKey) : undefined;
+    const lastIsUser = lastNode?.kind === 'user' || lastNode?.kind === 'steering';
+
+    // 2. 最后一个节点是用户发言（含补发消息）：检查该用户节点**之后**是否已有模型产出。
+    //    之前用 slice(1) 是 Bug——补发消息在组中部，前面的旧输出会让等待永远不出现。
+    if (lastIsUser && lastKey) {
+      const lastGroup = groups.at(-1);
+      const turn = lastGroup?.turn === null || lastGroup?.turn === undefined ? undefined : timeline.turns.get(lastGroup.turn);
+      if (turn?.status === 'closed') return false;
+      const keys = lastGroup?.keys ?? [];
+      const userIdx = keys.lastIndexOf(lastKey);
+      const hasOutputAfter = keys.slice(userIdx + 1).some(key => {
+        const node = nodes.get(key);
+        if (!node || node.visibility === 'hidden') return false;
+        if (node.kind === 'assistant-step') {
+          const data = node.data as { blocks?: unknown[] };
+          return Array.isArray(data.blocks) && data.blocks.length > 0;
+        }
+        return node.kind === 'tool-call' || node.kind === 'tool-return' || node.kind === 'command-input';
+      });
+      return !hasOutputAfter;
+    }
+
+    // 3. assistant-step 已创建但一个 block 都没有：模型收到请求、内容未吐出的瞬间。
+    if (lastNode?.kind === 'assistant-step') {
+      const data = lastNode.data as { status?: string; blocks?: unknown[] };
+      if (data.status === 'running' && (!data.blocks || data.blocks.length === 0)) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [running, pendingSubmissions, order, nodes, groups, timeline]);
   const scroll = useReadingScroll(root, motion);
   const pinnedKeys = usePinnedSelection(root);
   const selectedProcessKeys = usePinnedSelection(root, '[data-reader-process]');
@@ -686,13 +751,12 @@ export function Reader(props: ReaderProps) {
     return pendingSubmissions.filter(sub => sub.placement !== 'queued');
   }, [pendingSubmissions]);
 
-  return <StreamMotionContext.Provider value={streamMotion}><div ref={root} className={css.root} data-dsh-better-display="0.1.0" data-motion={motion ? 'on' : 'off'}>
+  return <StreamMotionContext.Provider value={streamMotion}><div ref={root} className={css.root} data-dsh-better-display="0.1.1" data-reader-wait-clock-version="input-v1" data-reader-wait-start={waitAnchor.time ?? undefined} data-motion={motion ? 'on' : 'off'}>
     <TimelineRail items={timelineItems} activeTurn={activeTurn} busyTurn={busyTurn} onNavigate={onNavigateTurn} />
     <div className={css.column}>
-      <div className={css.toolbar} data-ud-check="reader-toolbar">
-        <span title="基于真实消息类型和轮次边界整理。当前协议没有独立的正文阶段标记，无法确认的内容会继续保留。">阅读 · 原始记录完整保留</span>
-        <button type="button" className={css.textButton} aria-pressed={motionPreference} onClick={() => props.actions.setMotion(!motionPreference)} title="新到文字柔和显现，过程平滑展开；关闭后立即完整显示，自动遵循系统减少动态效果设置。">{motionPreference && !motion ? '动效 · 跟随系统关闭' : `动效${motionPreference ? '开' : '关'}`}</button>
-      </div>
+      <StickyLane kind="toolbar" className={css.toolbar}>
+        <button type="button" className={css.textButton} aria-pressed={autoFold} onClick={() => props.actions.setAutoFold(!autoFold)} title="新思考产生时，是否自动将此前步骤收拢为一行汇总。关闭后完整保留原始过程与流式输出。">{`自动折叠${autoFold ? '开' : '关'}`}</button>
+      </StickyLane>
       {hasMore && <button type="button" className={css.historyButton} disabled={loadingOlder} onClick={async () => {
         setHistoryError(false);
         try { await props.loadOlder(); } catch { setHistoryError(true); }
@@ -700,7 +764,7 @@ export function Reader(props: ReaderProps) {
       {historyError && <div className={css.notice}>历史记录加载失败，可再次尝试；现有内容未改变。</div>}
       {openError && <div className={css.error} role="alert">会话暂时无法读取：{openError.message}</div>}
       {loading && groups.length === 0 && <p className={css.empty} role="status">正在读取会话…</p>}
-      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} />)}
+      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
       {visibleSubmissions.map(submission => (
         <div key={submission.requestId} className={css.userCluster} data-reader-pending-submission>
           {submission.attachments.some(item => item.type === 'image') && (
@@ -722,6 +786,7 @@ export function Reader(props: ReaderProps) {
           <UserMessageActions text={submission.text} time={submission.time} />
         </div>
       ))}
+      {isAwaitingModel && <WaitingStatus anchor={waitAnchor} label={props.t ? props.t('chat.deepDiving') : '深度求索中...'} />}
       {pending !== undefined && <div className={css.attention} role="alert" data-reader-attention>
         <strong>{pending.kind === 'question' ? '需要你回答一个问题' : '需要你的确认'}</strong>
         <span>请在下方原生操作区处理。此提示不会收进执行过程。</span>

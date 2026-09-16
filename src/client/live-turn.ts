@@ -124,8 +124,8 @@ export function segmentLiveTurn(
   return steps;
 }
 
-export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary): LiveTurnItem[] {
-  const live = liveFoldEnabled(boundary);
+export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold = true): LiveTurnItem[] {
+  const live = autoFold && liveFoldEnabled(boundary);
   const items: LiveTurnItem[] = [];
   let chain: LiveStep[] = [];
   const flush = () => {

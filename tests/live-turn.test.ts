@@ -208,3 +208,11 @@ test('steering in the flow is a chain reset, same as a mid-turn user message', (
     ['open', 'b:reasoning:0'],
   ]);
 });
+
+test('disabling auto-fold keeps all steps open as plain streaming steps', () => {
+  const steps = [reasoning('1'), body('2'), tool('3'), reasoning('4'), tool('5'), reasoning('6')];
+  const items = presentLiveTurn(steps, open, false);
+  assert.equal(items.some(item => item.kind === 'fold'), false);
+  assert.deepEqual(items.map(item => item.key), ['1', '2', '3', '4', '5', '6']);
+  assert.deepEqual(items.map(item => item.kind), ['open', 'open', 'open', 'open', 'open', 'open']);
+});

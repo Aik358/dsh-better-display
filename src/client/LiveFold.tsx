@@ -1,28 +1,43 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import type { RefObject } from 'react';
-import { Disclosure, ProcessFragment, StatusText } from './motion.js';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { FOLD_TIMING } from './fold-choreography.js';
+import css from './Reader.module.css';
 
-/** Prior-chain control on the live process stack: same Disclosure / StatusText
- *  / ProcessFragment paths as the 阅读 tab, not a parallel fold box. */
-export function PriorChainFold({ summary, motion, foldOpen, onFoldOpenChange, processKey, processOpen, onRead, returnFocusTo }: {
-  summary: string;
-  motion: boolean;
-  foldOpen: boolean;
-  onFoldOpenChange: (value: boolean) => void;
-  processKey: string;
-  processOpen: boolean;
-  onRead: () => void;
-  returnFocusTo: RefObject<HTMLElement>;
-}) {
-  // Mount closed so the header uses the same 0→auto process-open path as a
-  // newly disclosed process fragment, instead of popping in at full height.
-  const [headerOpen, setHeaderOpen] = useState(false);
-  useLayoutEffect(() => { setHeaderOpen(processOpen); }, [processOpen]);
-  const button = useRef<HTMLButtonElement>(null);
-  return <ProcessFragment open={headerOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={processKey} framed>
-    <div data-reader-live-fold data-expanded={foldOpen} data-reader-live-fold-summary={summary}>
-      <Disclosure open={foldOpen} onChange={value => { onRead(); onFoldOpenChange(value); }} buttonRef={button}
-        ariaLabel="此前步骤" showMeta={false} label={<StatusText text={summary} motion={motion} />} />
-    </div>
-  </ProcessFragment>;
+/** Values are presentation commits, never live network counters. */
+export function SubtleNumberRoll({ value, motion }: { value: number; motion: boolean }) {
+  const [outgoing, setOutgoing] = useState<number | null>(null);
+  const previous = useRef(value);
+  useLayoutEffect(() => {
+    if (value === previous.current) return;
+    const old = previous.current;
+    previous.current = value;
+    if (!motion) { setOutgoing(null); return; }
+    setOutgoing(old);
+    const timer = window.setTimeout(() => setOutgoing(null), FOLD_TIMING.count);
+    return () => window.clearTimeout(timer);
+  }, [value, motion]);
+  return <span className={css.numberRollRoot} aria-hidden="true">
+    <span className={css.numberRollSizer}>{value}</span>
+    {outgoing !== null && <span key={`out-${outgoing}`} className={`${css.numberRollDigit} ${css.numberRollExit}`}>{outgoing}</span>}
+    <span key={`cur-${value}`} className={`${css.numberRollDigit} ${outgoing !== null ? css.numberRollEnter : ''}`}>{value}</span>
+  </span>;
+}
+
+export function FoldSummaryText({ summary, motion }: { summary: string; motion: boolean }) {
+  const parts = useMemo(() => {
+    const regex = /([^\d]+)(\d+)/g;
+    const result: { text: string; number?: number }[] = [];
+    let end = 0;
+    for (const match of summary.matchAll(regex)) {
+      result.push({ text: match[1]!, number: Number(match[2]) });
+      end = match.index! + match[0].length;
+    }
+    if (end < summary.length) result.push({ text: summary.slice(end) });
+    return result;
+  }, [summary]);
+  return <span className={css.foldSummary} data-reader-fold-summary={summary} aria-label={summary}>
+    {parts.map(part => <span key={part.text} className={css.foldSummaryPart}>
+      <span>{part.text}</span>
+      {part.number !== undefined && <SubtleNumberRoll value={part.number} motion={motion} />}
+    </span>)}
+  </span>;
 }

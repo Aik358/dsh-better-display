@@ -87,10 +87,10 @@ export function StatusText({ text, motion, shimmer = false }: { text: string; mo
   </span>;
 }
 
-export function Disclosure({ open, onChange, label, status, controls, buttonRef, ariaLabel, showMeta = true }: {
+export function Disclosure({ open, onChange, label, controls, buttonRef, ariaLabel }: {
   open: boolean; onChange: (value: boolean) => void; label: ReactNode;
-  status?: string; controls?: string; buttonRef: RefObject<HTMLButtonElement>;
-  ariaLabel?: string; showMeta?: boolean;
+  controls?: string; buttonRef: RefObject<HTMLButtonElement>;
+  ariaLabel?: string;
 }) {
   const name = ariaLabel ?? '思考与过程';
   return <div className={css.disclosure} data-reader-disclosure data-expanded={open}>
@@ -98,11 +98,6 @@ export function Disclosure({ open, onChange, label, status, controls, buttonRef,
       {label}
       <svg className={css.chevron} data-open={open} viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
     </button>
-    {showMeta && <div className={css.processMeta} data-reader-process-meta data-open={open} aria-hidden={!open}>
-      <div className={css.processMetaInner}><div className={css.processMetaLine}>
-        <span>思考与过程</span>{status && <span className={css.meta}>{status}</span>}
-      </div></div>
-    </div>}
   </div>;
 }
 
@@ -131,16 +126,33 @@ export function ProcessFragment({ open, motion, onRead, returnFocusTo, nodeKey, 
       setPresent(open);
       return;
     }
-    const animation = element.animate([{ height: `${from}px` }, { height: `${target}px` }], { duration: 260, easing: EASING, fill: 'both' });
+    if (from > target && motion) {
+      document.body.dataset.readerFolding = 'true';
+    }
+    const animation = element.animate(
+      from > target
+        ? [
+            { offset: 0, height: `${from}px`, opacity: 1, transform: 'scaleY(1) translateY(0)' },
+            { offset: 0.32, height: `${Math.round(from * 0.92)}px`, opacity: 0.35, transform: 'scaleY(0.96) translateY(-2px)' },
+            { offset: 1, height: `${target}px`, opacity: 0, transform: 'scaleY(0.68) translateY(-8px)' },
+          ]
+        : [
+            { offset: 0, height: `${from}px`, opacity: 0, transform: 'scaleY(0.8) translateY(6px)' },
+            { offset: 0.3, height: `${Math.round(target * 0.4)}px`, opacity: 0.4, transform: 'scaleY(0.92) translateY(3px)' },
+            { offset: 1, height: `${target}px`, opacity: 1, transform: 'scaleY(1) translateY(0)' },
+          ],
+      { duration: 380, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'both' },
+    );
     running.current = animation;
     animation.onfinish = () => {
       if (running.current !== animation) return;
+      delete document.body.dataset.readerFolding;
       running.current = null;
       animation.cancel();
       setPresent(open);
     };
   }, [open, motion, returnFocusTo]);
-  useEffect(() => () => { running.current?.cancel(); }, []);
+  useEffect(() => () => { delete document.body.dataset.readerFolding; running.current?.cancel(); }, []);
   if (!open && !present) return null;
   return <div ref={body} className={css.disclosureBody} data-reader-process data-reader-process-key={nodeKey} data-ud-motion="reader-process-size"
     aria-hidden={!open} onPointerDown={() => { if (open) onRead(); }} onFocusCapture={() => { if (open) onRead(); }} {...(!open ? { inert: '' } : {})}>
@@ -199,7 +211,19 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     port.current = scroll;
     let followFrame = 0;
     let lastFrameAt = 0;
+    let layoutDepth = 0;
     let lastWrittenTop: number | null = null;
+    const layoutStart = () => {
+      layoutDepth++;
+      cancelAnimationFrame(followFrame); followFrame = 0;
+      capture();
+    };
+    const layoutEnd = () => {
+      layoutDepth = Math.max(0, layoutDepth - 1);
+      if (!layoutDepth && following.current && !followFrame) {
+        lastFrameAt = performance.now(); followFrame = requestAnimationFrame(follow);
+      }
+    };
     cancelFollow.current = () => {
       cancelAnimationFrame(followFrame);
       followFrame = 0;
@@ -227,7 +251,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     };
     const onScroll = () => {
       // While a follow animation is actively driving scroll, do not cancel following midway.
-      if (followFrame !== 0) return;
+      if (followFrame !== 0 || layoutDepth > 0) return;
       // Our easing frames must not be mistaken for a user leaving the bottom.
       if (lastWrittenTop !== null && Math.abs(scroll.scrollTop - lastWrittenTop) < 1) return;
       const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 25;
@@ -253,6 +277,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     const follow = (now: number) => {
       followFrame = 0;
       if (!following.current || selected() || content.contains(document.activeElement)) return;
+      if (layoutDepth > 0) return;
       const gap = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
       const delta = Math.min(48, Math.max(1, now - lastFrameAt));
       lastFrameAt = now;
@@ -267,7 +292,8 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     const observer = new ResizeObserver(() => {
       if (selected()) return;
       if (following.current && !content.contains(document.activeElement)) {
-        if (!motion) writeTop(scroll.scrollHeight);
+        // Height is already animated: no second, lagging scroll easing.
+        if (!motion || layoutDepth > 0) writeTop(scroll.scrollHeight);
         else if (!followFrame) { lastFrameAt = performance.now(); followFrame = requestAnimationFrame(follow); }
       } else if (!following.current && anchor.current?.element.isConnected) {
         const delta = anchor.current.element.getBoundingClientRect().top - anchor.current.top;
@@ -277,6 +303,8 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     });
     observer.observe(content);
     if (scroll !== content) observer.observe(scroll);
+    content.addEventListener('reader-layout-start', layoutStart);
+    content.addEventListener('reader-layout-end', layoutEnd);
     scroll.addEventListener('scroll', onScroll, { passive: true });
     scroll.addEventListener('wheel', onWheel, { passive: true });
     scroll.addEventListener('touchstart', onTouch, { passive: true });
@@ -284,6 +312,8 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     scroll.addEventListener('keydown', onKey);
     return () => {
       cancelAnimationFrame(firstFrame); cancelAnimationFrame(followFrame); cancelAnimationFrame(captureFrame); observer.disconnect();
+      content.removeEventListener('reader-layout-start', layoutStart);
+      content.removeEventListener('reader-layout-end', layoutEnd);
       scroll.removeEventListener('scroll', onScroll); scroll.removeEventListener('wheel', onWheel);
       scroll.removeEventListener('touchstart', onTouch); scroll.removeEventListener('touchmove', onTouch);
       scroll.removeEventListener('keydown', onKey);
