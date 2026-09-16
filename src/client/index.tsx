@@ -26,6 +26,7 @@ export const inject = ['slots', 'sessions', 'conversation', 'remote', 'remote.se
 
 export function apply(ctx: Context): void {
   const store = createReaderStore();
+  ctx.slots.inject('tool.call.toolview', () => {});
   ctx.slots.inject('conversation.view', function* () {
     yield ctx.slots.register({
     name: 'conversation.view',
@@ -33,7 +34,10 @@ export function apply(ctx: Context): void {
     order: -5,
     label: () => '阅读',
     locale: 'chat',
-    children: { 'dsh-better-display.block': { kind: 'chain', scope: 'session' } },
+    children: {
+      'dsh-better-display.block': { kind: 'chain', scope: 'session' },
+      'tool.call.toolview': { kind: 'keyed', scope: 'turn' },
+    },
     store,
     inject: (sessionId: SessionId): ReaderInjected => {
       const session = () => {
@@ -157,12 +161,22 @@ export function apply(ctx: Context): void {
           try {
             const slotsService = ctx.slots as unknown as { entriesOfSlot?: (name: string) => unknown[] };
             const entries = slotsService?.entriesOfSlot?.('tool.call.toolview') ?? [];
-            const matches = entries.filter((e: any) => e?.key === toolName && typeof e?.component === 'function');
+            const matches = entries.filter((e: any) => {
+              const key = e?.options?.key ?? e?.key;
+              const comp = e?.component ?? e?.view ?? e?.render ?? (typeof e === 'function' ? e : null);
+              return key === toolName && typeof comp === 'function';
+            });
             if (matches.length === 0) return null;
-            matches.sort((a: any, b: any) => (a?.priority ?? 0) - (b?.priority ?? 0));
-            const best = matches[0] as { priority?: number; component: import('react').ComponentType<any> };
-            if ((best.priority ?? 0) < 0 || (toolName !== 'edit' && toolName !== 'write')) {
-              return best.component;
+            matches.sort((a: any, b: any) => {
+              const prioA = a?.options?.priority ?? a?.priority ?? 0;
+              const prioB = b?.options?.priority ?? b?.priority ?? 0;
+              return prioA - prioB;
+            });
+            const best = matches[0] as any;
+            const prio = best?.options?.priority ?? best?.priority ?? 0;
+            const comp = best?.component ?? best?.view ?? best?.render ?? (typeof best === 'function' ? best : null);
+            if (prio < 0 || (toolName !== 'edit' && toolName !== 'write')) {
+              return comp;
             }
             return null;
           } catch {
