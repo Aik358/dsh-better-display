@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { StreamMotionContext } from './streaming.js';
 import type { ReactNode } from 'react';
 import { REASON_HOLD, REASON_STEP, reasoningTarget } from './reasoning-follow.js';
 import css from './Reader.module.css';
@@ -21,7 +22,8 @@ export function ReasoningCard({ children, step, active, motion, selected, onRead
   const resize = useRef<Animation | null>(null);
   const previousExpanded = useRef(expanded);
   const stopFollow = useRef<() => void>(() => {});
-  const allowed = following && active && motion && !selected;
+  const { paused = false } = useContext(StreamMotionContext);
+  const allowed = following && active && motion && !selected && !paused;
 
   const pause = useCallback(() => {
     stopFollow.current();
