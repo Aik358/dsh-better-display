@@ -12,7 +12,7 @@ const steps:LiveStep[]=[...Array.from({length:6},(_,i):LiveStep=>({kind:'reasoni
 function Fixture(){
  const [expanded,setExpanded]=useState(true),[open,setOpen]=useState<Record<string,boolean>>({}),[closed,setClosed]=useState(false);const button=useRef<HTMLButtonElement>(null);
  const frame=useMemo(()=>({items:presentLiveTurn(steps,{status:'open',reason:null,latestStep:7,closingStep:null}),snapshot:{} as ChatSnapshot}),[]);
- return <><button onClick={()=>setClosed(v=>!v)}>切换完成状态</button><div data-conversation-scroll style={{height:'calc(100vh - 32px)',overflow:'auto'}}><div className={css.root} data-dsh-better-display="fixture"><div className={css.column}>
+ return <><button onClick={()=>setClosed(v=>!v)}>切换完成状态</button><div data-conversation-scroll style={{height:'calc(100vh - 32px)',overflow:'auto'}}><div className={css.root} data-dsh-better-display="fixture"><div className={css.column} data-chat-flow="">
  <StickyLane kind="toolbar" className={css.toolbar}><button className={css.textButton}>自动折叠开</button></StickyLane>
  <section className={css.turn} data-reader-turn="1"><div style={{height:240,background:'#eef2ff',alignSelf:'flex-end',width:'65%'}}>用户消息：滚动抵达顶部才吸顶。</div>
  <StickyLane kind="status" className={css.turnProcessSticky}><Disclosure open={expanded} onChange={setExpanded} buttonRef={button} label={<StatusText text="正在使用工具" motion={false}/>} /></StickyLane>

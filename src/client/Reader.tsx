@@ -751,9 +751,11 @@ export function Reader(props: ReaderProps) {
     return pendingSubmissions.filter(sub => sub.placement !== 'queued');
   }, [pendingSubmissions]);
 
+  // ChatView publishes data-chat-flow="" on its column. Skins treat a
+  // scrollport without that hook as inspect-only and hide [data-composer-seat].
   return <StreamMotionContext.Provider value={streamMotion}><div ref={root} className={css.root} data-dsh-better-display="0.1.1" data-reader-wait-clock-version="input-v1" data-reader-wait-start={waitAnchor.time ?? undefined} data-motion={motion ? 'on' : 'off'}>
     <TimelineRail items={timelineItems} activeTurn={activeTurn} busyTurn={busyTurn} onNavigate={onNavigateTurn} />
-    <div className={css.column}>
+    <div className={css.column} data-chat-flow="">
       <StickyLane kind="toolbar" className={css.toolbar}>
         <button type="button" className={css.textButton} aria-pressed={autoFold} onClick={() => props.actions.setAutoFold(!autoFold)} title="新思考产生时，是否自动将此前步骤收拢为一行汇总。关闭后完整保留原始过程与流式输出。">{`自动折叠${autoFold ? '开' : '关'}`}</button>
       </StickyLane>

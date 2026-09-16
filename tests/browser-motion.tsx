@@ -53,7 +53,7 @@ function Demo() {
     <button onClick={()=>setMotion(v=>!v)}>动效{motion?'开':'关'}</button>
   </nav><div data-conversation-scroll style={{height:'calc(100vh - 70px)',overflow:'auto'}}>
     <StreamMotionContext.Provider value={{enabled:motion,activatedAt:Date.now()}}>
-    <div ref={root} className={css.root} data-motion={motion?'on':'off'}><div className={css.column}>
+    <div ref={root} className={css.root} data-motion={motion?'on':'off'}><div className={css.column} data-chat-flow="">
       <div className={css.toolbar}><button className={css.textButton} onClick={()=>setAuto(v=>!v)}>自动折叠{auto?'开':'关'}</button></div>
       <div className={css.turnProcessSticky}><Disclosure open={expanded} onChange={setExpanded} buttonRef={button} label={<StatusText text="正在处理" motion={motion}/>} /></div>
       <ChoreographedFlow id="fixture-flow" frame={frame} motion={motion} enabled={auto} urgent={urgent} processOpen={expanded}
