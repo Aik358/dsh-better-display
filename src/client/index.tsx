@@ -153,6 +153,22 @@ export function apply(ctx: Context): void {
             return false;
           }
         },
+        getToolView: (toolName: string) => {
+          try {
+            const slotsService = ctx.slots as unknown as { entriesOfSlot?: (name: string) => unknown[] };
+            const entries = slotsService?.entriesOfSlot?.('tool.call.toolview') ?? [];
+            const matches = entries.filter((e: any) => e?.key === toolName && typeof e?.component === 'function');
+            if (matches.length === 0) return null;
+            matches.sort((a: any, b: any) => (a?.priority ?? 0) - (b?.priority ?? 0));
+            const best = matches[0] as { priority?: number; component: import('react').ComponentType<any> };
+            if ((best.priority ?? 0) < 0 || (toolName !== 'edit' && toolName !== 'write')) {
+              return best.component;
+            }
+            return null;
+          } catch {
+            return null;
+          }
+        },
       };
     },
     }, Reader);

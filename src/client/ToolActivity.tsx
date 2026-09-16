@@ -89,6 +89,12 @@ function ResultView({ entry, model, phase, ...render }: BlockRenderProps & { ent
   const meta = objectValue(block.meta);
   const text = block.content.filter(item => item.type === 'text').map(item => item.text).join('\n');
   if (phase === 'interrupted') return <><p className={css.toolDetailNote}>工具已取消，未正常完成。输入和原始返回记录仍可查看。</p><InputView model={model} preparing={false} fillComposer={render.fillComposer} /><pre className={css.toolRaw}>{text}</pre></>;
+
+  const CustomToolView = render.getToolView?.(model.name);
+  if (CustomToolView) {
+    return <div data-reader-tool-custom><CustomToolView block={block} toolName={model.name} cwd={model.cwd} openFile={render.openFile} /></div>;
+  }
+
   if (model.category === 'terminal') {
     const facts = executionFacts(block);
     const output = text.replace(/\n\[(?:exit code: \d+|killed by signal: [^\]\n]+)\]$/, '');
@@ -200,7 +206,8 @@ export const ToolActivity = memo(function ToolActivityView({ entry, motion, turn
 }, (previous, next) => previous.entry.callId === next.entry.callId && previous.entry.block === next.entry.block
   && previous.entry.draft === next.entry.draft && previous.entry.step === next.entry.step
   && previous.motion === next.motion && previous.turnClosed === next.turnClosed && previous.depth === next.depth
-  && previous.onRead === next.onRead && previous.renderSlotChain === next.renderSlotChain && previous.loadImage === next.loadImage && previous.fillComposer === next.fillComposer);
+  && previous.onRead === next.onRead && previous.renderSlotChain === next.renderSlotChain && previous.loadImage === next.loadImage && previous.fillComposer === next.fillComposer
+  && previous.getToolView === next.getToolView);
 
 /** Rich media (images, MCP widgets) rendered outside the folded tool ledger. */
 export function ToolMedia({ block, depth = 0, ...render }: BlockRenderProps & { block: ToolCallBlock; depth?: number }) {
