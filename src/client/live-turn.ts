@@ -2,6 +2,7 @@ import type { AssistantChatData, ChatConversationViewNode } from '@deepseek-ai/d
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import { assistantSegments, hasVisibleBody } from './projection.js';
 import type { TurnBoundary } from './projection.js';
+import { activitySummary, stringValue } from './tool-activity.js';
 import type { ReaderFlowEntry, ToolActivityEntry } from './tool-activity.js';
 
 export type LiveStep =
@@ -124,14 +125,105 @@ export function segmentLiveTurn(
   return steps;
 }
 
-export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold = true): LiveTurnItem[] {
-  const live = autoFold && liveFoldEnabled(boundary);
+/** One finished tool call, described by what it actually did. */
+function toolSummary(entry: ToolActivityEntry): string {
+  const info = activitySummary(entry);
+  const clip = (value: string | undefined, max = 38): string | undefined => {
+    if (!value) return undefined;
+    const flat = value.replace(/\s+/gu, ' ').trim();
+    if (!flat) return undefined;
+    return flat.length > max ? flat.slice(0, max - 1) + '\u2026' : flat;
+  };
+  const base = info.target ? clip(info.target.split(/[/\\]/u).at(-1), 28) : undefined;
+  const said = clip(stringValue(info.args, 'description'), 40);
+  switch (info.category) {
+    case 'read': return '读取 ' + (base ?? '文件');
+    case 'write': return clip(info.title, 40) ?? '写入文件';
+    case 'terminal': {
+      const cmd = clip(info.command, 32);
+      return said ?? (cmd ? '运行 ' + cmd : '运行命令');
+    }
+    case 'search': {
+      const needle = clip(stringValue(info.args, 'pattern', 'query'), 26);
+      return info.name === 'glob' ? '查找 ' + (needle ?? '文件') : '搜索 ' + (needle ?? '内容');
+    }
+    case 'web': {
+      const query = clip(info.target, 30);
+      return (info.name === 'web_search' ? '搜索网页' : '读取网页') + (query ? ' ' + query : '');
+    }
+    default: return clip(info.title ?? info.name, 32) ?? '工具调用';
+  }
+}
+
+/** A readable one-line digest of one finished process run. */
+export function processSummary(steps: readonly LiveStep[]): string {
+  let reasoning = 0;
+  let extra = 0;
+  const tools: string[] = [];
+  for (const step of steps) {
+    if (step.kind === 'reasoning') reasoning += 1;
+    else if (step.kind === 'other') extra += 1;
+    else if (step.kind === 'tool') tools.push(toolSummary(step.entry));
+  }
+  const parts: string[] = [];
+  if (reasoning) parts.push(reasoning > 1 ? '思考\u00d7' + reasoning : '思考');
+  if (tools.length) {
+    parts.push(tools.slice(0, 2).join('\u3001'));
+    if (tools.length > 2) parts.push('\u7b49 ' + tools.length + ' \u6b65');
+  }
+  if (extra) parts.push('记录\u00d7' + extra);
+  return parts.filter(Boolean).join(' \u00b7 ') || '过程';
+}
+
+/**
+ * Process-only chains: prose is never folded, and process folds one finished
+ * sub-session at a time. The live run keeps streaming in full; as soon as the
+ * next thought opens, the previous run collapses into its digest. A closed turn
+ * folds its trailing run too, so it reads as alternating digests and prose.
+ * @param chain - source-ordered steps since the last user message.
+ * @param turnOpen - true while the turn is still producing.
+ * @returns items where finished process runs are folded.
+ */
+export function splitProcessChain(chain: readonly LiveStep[], turnOpen: boolean): LiveTurnItem[] {
+  const items: LiveTurnItem[] = [];
+  let pending: LiveStep[] = [];
+  const commit = () => {
+    if (!pending.length) return;
+    items.push({ kind: 'fold', key: 'live-fold:' + pending[0]!.key, steps: pending, summary: processSummary(pending) });
+    pending = [];
+  };
+  for (const step of chain) {
+    if (step.kind !== 'reasoning' && step.kind !== 'tool' && step.kind !== 'other') {
+      commit();
+      items.push({ kind: 'open', key: step.key, step });
+      continue;
+    }
+    if (step.kind === 'reasoning' && pending.length) commit();
+    pending.push(step);
+  }
+  if (turnOpen) {
+    for (const step of pending) items.push({ kind: 'open', key: step.key, step });
+    return items;
+  }
+  commit();
+  return items;
+}
+export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold = true, processOnly = false): LiveTurnItem[] {
+  const turnOpen = liveFoldEnabled(boundary);
+  // Auto-fold still only acts inside an open turn; the process-only mode also
+  // folds the trailing run once the turn closes.
+  const live = (autoFold && turnOpen) || processOnly;
   const items: LiveTurnItem[] = [];
   let chain: LiveStep[] = [];
   const flush = () => {
     if (!chain.length) return;
     if (!live) {
       for (const step of chain) items.push({ kind: 'open', key: step.key, step });
+      chain = [];
+      return;
+    }
+    if (processOnly) {
+      items.push(...splitProcessChain(chain, turnOpen));
       chain = [];
       return;
     }

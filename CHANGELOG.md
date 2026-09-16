@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Reading and folding
+
+- A later reasoning step folds only the finished process run it follows. The run
+  that is still streaming stays fully expanded, so a long turn reads as
+  alternating digests and prose instead of collapsing mid-thought.
+- Add a process-only fold mode (`只折叠过程`). Prose is never folded; each
+  finished run of reasoning / tool / record steps collapses into one digest that
+  names what the tools actually did (`读取 Reader.tsx`, `运行 pnpm test`,
+  `搜索 processSummary`), read from the same tool identity the tool cards use.
+  Off by default, so the existing auto-fold behaviour is unchanged.
+- A finished process-only turn folds its trailing run too, and skips the
+  duplicate closed-turn counter row it no longer needs.
+
+### Reading surface
+
+- Sticky lanes (toolbar, status, fold summary, live fold) use the same liquid
+  glass as the dsh-auto-memory pane: translucent `bg-layer-2` wash, `blur(28px)`,
+  hairline border, 16px radius and a soft lift, instead of an opaque band that
+  covered the transcript.
+- The toolbar reserves the width of its whole control group. Measuring only the
+  first button let the status lane paint over every later control.
+
+### Scroll
+
+- Tail-follow only detaches on a real upward move by the reader. Content growth
+  and the follow easing itself also move `scrollTop`, and reading that as "the
+  user left the bottom" froze following mid-turn.
+- Disable browser scroll anchoring on the conversation scroller while the reader
+  is mounted: it moved the viewport on its own as the transcript grew.
+- Only a focused text field suspends following, and only inside the reader.
+  Focusing the composer used to stop the transcript from advancing.
 ## 0.1.1 — 2026-09-16
 
 The accepted reading-view integration, including the work consolidated from PRs #2, #5 and #8. Earlier `0.2.0` / `0.2.1` headings were unpublished development notes; those changes ship in this release, not as separate published versions.

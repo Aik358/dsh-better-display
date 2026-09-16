@@ -209,6 +209,10 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     if (!content) return;
     const scroll = content.closest<HTMLElement>('[data-conversation-scroll]') ?? content;
     port.current = scroll;
+    // Browser scroll anchoring moves the viewport on its own as the transcript
+    // grows, which reads as the page freezing mid-follow.
+    const previousOverflowAnchor = scroll.style.overflowAnchor;
+    scroll.style.overflowAnchor = 'none';
     let followFrame = 0;
     let lastFrameAt = 0;
     let layoutDepth = 0;
@@ -233,6 +237,17 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       const selection = document.getSelection();
       return selection && !selection.isCollapsed && selection.anchorNode && content.contains(selection.anchorNode);
     };
+    // Only a focused text field suspends tail-follow. Clicking a fold control
+    // inside the reader also moves document.activeElement into `content`, and
+    // treating that as "user is busy" froze following for the rest of the turn.
+    const editingText = () => {
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement)) return false;
+      // The composer lives outside this subtree: focusing it must never stop
+      // the transcript from following.
+      if (!content.contains(active)) return false;
+      return active.isContentEditable || active.tagName === 'TEXTAREA' || active.tagName === 'INPUT';
+    };
     const capture = () => {
       const top = scroll.getBoundingClientRect().top;
       const candidates = content.querySelectorAll<HTMLElement>('[data-reader-anchor]');
@@ -249,15 +264,22 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       if (captureFrame) return;
       captureFrame = requestAnimationFrame(() => { captureFrame = 0; capture(); });
     };
+    const atBottom = () => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 25;
     const onScroll = () => {
       // While a follow animation is actively driving scroll, do not cancel following midway.
       if (followFrame !== 0 || layoutDepth > 0) return;
       // Our easing frames must not be mistaken for a user leaving the bottom.
       if (lastWrittenTop !== null && Math.abs(scroll.scrollTop - lastWrittenTop) < 1) return;
-      const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 25;
-      following.current = atBottom;
-      setDetached(!atBottom);
-      if (!atBottom) { cancelAnimationFrame(followFrame); followFrame = 0; scheduleCapture(); }
+      if (!following.current) {
+        // Only an explicit return to the bottom resumes following.
+        if (atBottom()) { following.current = true; setDetached(false); }
+        return;
+      }
+      // Content growth and our own easing also change scrollTop; only a real
+      // upward move by the reader detaches the tail.
+      if (lastWrittenTop !== null && scroll.scrollTop < lastWrittenTop - 1) {
+        following.current = false; setDetached(true); cancelAnimationFrame(followFrame); followFrame = 0; scheduleCapture();
+      }
     };
     const onWheel = (event: WheelEvent) => {
       cancelAnimationFrame(followFrame); followFrame = 0; lastWrittenTop = null;
@@ -276,7 +298,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     const writeTop = (top: number) => { scroll.scrollTop = top; lastWrittenTop = scroll.scrollTop; };
     const follow = (now: number) => {
       followFrame = 0;
-      if (!following.current || selected() || content.contains(document.activeElement)) return;
+      if (!following.current || selected() || editingText()) return;
       if (layoutDepth > 0) return;
       const gap = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
       const delta = Math.min(48, Math.max(1, now - lastFrameAt));
@@ -291,7 +313,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     });
     const observer = new ResizeObserver(() => {
       if (selected()) return;
-      if (following.current && !content.contains(document.activeElement)) {
+      if (following.current && !editingText()) {
         // Height is already animated: no second, lagging scroll easing.
         if (!motion || layoutDepth > 0) writeTop(scroll.scrollHeight);
         else if (!followFrame) { lastFrameAt = performance.now(); followFrame = requestAnimationFrame(follow); }
@@ -314,6 +336,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       cancelAnimationFrame(firstFrame); cancelAnimationFrame(followFrame); cancelAnimationFrame(captureFrame); observer.disconnect();
       content.removeEventListener('reader-layout-start', layoutStart);
       content.removeEventListener('reader-layout-end', layoutEnd);
+      scroll.style.overflowAnchor = previousOverflowAnchor;
       scroll.removeEventListener('scroll', onScroll); scroll.removeEventListener('wheel', onWheel);
       scroll.removeEventListener('touchstart', onTouch); scroll.removeEventListener('touchmove', onTouch);
       scroll.removeEventListener('keydown', onKey);
