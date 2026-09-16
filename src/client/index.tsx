@@ -26,7 +26,6 @@ export const inject = ['slots', 'sessions', 'conversation', 'remote', 'remote.se
 
 export function apply(ctx: Context): void {
   const store = createReaderStore();
-  ctx.slots.inject('tool.call.toolview', () => {});
   ctx.slots.inject('conversation.view', function* () {
     yield ctx.slots.register({
     name: 'conversation.view',
@@ -34,10 +33,7 @@ export function apply(ctx: Context): void {
     order: -5,
     label: () => '阅读',
     locale: 'chat',
-    children: {
-      'dsh-better-display.block': { kind: 'chain', scope: 'session' },
-      'tool.call.toolview': { kind: 'keyed', scope: 'turn' },
-    },
+    children: { 'dsh-better-display.block': { kind: 'chain', scope: 'session' } },
     store,
     inject: (sessionId: SessionId): ReaderInjected => {
       const session = () => {
