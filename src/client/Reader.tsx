@@ -15,6 +15,9 @@ import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
+import { presentLiveTurn, segmentLiveTurn } from './live-turn.js';
+import type { LiveStep } from './live-turn.js';
+import { PriorChainFold } from './LiveFold.js';
 import type { ReaderGroup, TurnBoundary } from './projection.js';
 import type { BlockRenderProps, ReaderProps } from './types.js';
 import css from './Reader.module.css';
@@ -51,15 +54,14 @@ const ProcessNode = memo(function ProcessNode({ useChat, t, nodeKey, open, motio
   if (!node || node.visibility === 'hidden') return null;
   let content: ReactNode = null;
   if (isNode(node, 'context')) content = <ContextInjectionRow {...node.data} t={t} />;
-  else if (isNode(node, 'system-prompt')) content = <details className={css.detail}><summary>系统提示词</summary><pre className={css.toolRaw}>{node.data.text}</pre></details>;
-  else if (isNode(node, 'turn-process')) content = <JsonBlock label="轮次过程记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />;
+  else if (isNode(node, 'system-prompt')) content = <details className={css.detail}><summary>系统提示词</summary><pre className={css.systemPrompt}>{node.data.text}</pre></details>;
   else if (isNode(node, 'model-retry')) content = <JsonBlock label="模型重试记录" payload={node.data.attempts} truncatedLabel={truncatedJsonLabel} />;
   else if (isNode(node, 'command') || isNode(node, 'manual-compaction')) content = <JsonBlock label="命令记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />;
   return content && <ProcessFragment open={open} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>{content}</ProcessFragment>;
 });
 
-const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, motion, onRead, returnFocusTo, ...render }: SeatProps & {
-  motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>;
+const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, partStart, motion, onRead, returnFocusTo, ...render }: SeatProps & {
+  motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>; partStart?: number; folded?: boolean;
 }) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   if (!node || node.visibility === 'hidden' || !isNode(node, 'assistant-step')) return null;
@@ -67,12 +69,16 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
   const parts = assistantSegments(data.blocks);
   const earlier = isEarlierNarration(data, boundary);
   const hasToolCalls = data.blocks.some(block => block.kind === 'tool-call');
-  const isProcessStep = earlier || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
+  const isProcessStep = earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
   const body = data.blocks.filter(block => block.kind !== 'reasoning' && block.kind !== 'tool-call');
-  return <>{parts.map((part, index) => part.kind === 'reasoning'
+  const visible = partStart === undefined ? parts : parts.filter(part => part.start === partStart);
+  return <>{visible.map(part => {
+    const index = parts.findIndex(item => item.start === part.start);
+    const last = index === parts.length - 1;
+    return part.kind === 'reasoning'
     ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>
       <ReasoningCard step={data.step} active={processOpen && boundary.status === 'open' && data.step === boundary.latestStep} motion={motion} selected={pinned} onRead={onRead}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running' && index === parts.length - 1 && data.blocks.at(-1)?.kind === 'reasoning'}
+        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running' && last && data.blocks.at(-1)?.kind === 'reasoning'}
           holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </ReasoningCard>
     </ProcessFragment>
@@ -81,11 +87,11 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </article>
     </ProcessFragment>
-    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || !earlier}>
-      <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase="body">
+    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
+      <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-        {index === parts.length - 1 && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
-        {index === parts.length - 1 && !earlier && data.status !== 'running' && boundary.status === 'closed' && (
+        {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
+        {last && !earlier && !folded && data.status !== 'running' && boundary.status === 'closed' && (
           <CopyAnswer blocks={body} onFork={(() => {
             // The fork anchor must be the durable closing message seq (same as
             // the official turn-tail branch). AssistantChatData carries no seq
@@ -95,7 +101,8 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
           })()} metrics={render.metrics} />
         )}
       </article>
-    </RetiringContent>)}</>;
+    </RetiringContent>;
+  })}</>;
 });
 
 const CompactionDivider = memo(function CompactionDivider({ data }: {
@@ -223,6 +230,13 @@ const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, pr
   }
   if (isNode(node, 'compaction')) return <CompactionDivider data={node.data} />;
   if (node.kind === 'context' || node.kind === 'turn-tail' || node.kind === 'system-prompt' || node.kind === 'turn-process') return null;
+  if ((node.kind as string) === 'command-input') {
+    const data = node.data as { readonly text: string };
+    return <div className={css.user} data-reader-anchor data-reader-key={nodeKey}>
+      <p className={css.meta}>命令输入</p>
+      <p className={css.commandInput}>{data.text}</p>
+    </div>;
+  }
   return <div className={css.unknown} data-reader-anchor>
     <p>此记录类型暂未接入阅读页：{node.kind}</p>
     <JsonBlock label="查看原始记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />
@@ -439,11 +453,18 @@ const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedP
   const startsWithUser = firstKind === 'user';
   const mainKeys = startsWithUser ? group.keys.slice(1) : group.keys;
   const flow = useMemo(() => readerFlow({ ...group, keys: mainKeys }, turn, key => nodes.get(key)), [nodes, group, mainKeys, turn]);
+  const steps = useMemo(() => segmentLiveTurn(flow, key => nodes.get(key)), [flow, nodes]);
+  const liveItems = useMemo(() => presentLiveTurn(steps, boundary), [steps, boundary]);
   const hasProcess = flow.some(item => item.kind === 'tool' || hasProcessContent(nodes.get(item.nodeKey), boundary));
   // Only a real, still-active text selection delays folding. Merely clicking,
   // focusing or scrolling the live card does not create a permanent override.
-  const holdingSelection = flow.some(item => selectedProcessKeys.includes(item.key));
+  const holdingSelection = selectedProcessKeys.some(key =>
+    flow.some(item => item.key === key)
+    || liveItems.some(item => item.kind === 'fold'
+      ? item.key === key || item.steps.some(step => step.key === key || ('nodeKey' in step && step.nodeKey === key))
+      : item.key === key || ('nodeKey' in item.step && item.step.nodeKey === key)));
   const expanded = holdingSelection || processExpanded(expansionChoice, boundary);
+  const [foldOpenByKey, setFoldOpenByKey] = useState<Record<string, boolean>>({});
   const deliverables = useMemo(() => getTurnDeliverables(turn, flow), [turn, flow]);
   const fileMentions = useMemo(
     () => deliverables.length > 0 && props.openFile ? createProducedFileMentions(deliverables, props.openFile) : undefined,
@@ -480,6 +501,20 @@ const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedP
   const terminal = terminalLabel(boundary.reason);
   const hasTurnError = flow.some(item => item.kind === 'node' && nodes.get(item.nodeKey)?.kind === 'turn-error');
   const showTerminalNotice = terminal && !hasTurnError && boundary.reason !== 'interrupted' && boundary.reason !== 'aborted';
+  const renderStep = (step: LiveStep, processOpen: boolean, folded: boolean) => {
+    if (step.kind === 'reasoning' || step.kind === 'body') return <BlockBoundary>
+      <AssistantNode {...shared} boundary={boundary} nodeKey={step.nodeKey} partStart={step.start} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} folded={folded} motion={motion} onRead={pinProcess} returnFocusTo={processButton} />
+    </BlockBoundary>;
+    if (step.kind === 'tool') return <BlockBoundary><ProcessFragment open={processOpen} motion={motion} onRead={pinProcess} returnFocusTo={processButton} nodeKey={step.key} framed>
+      <ToolActivity {...shared} entry={step.entry} motion={motion} turnClosed={boundary.status === 'closed'} onRead={pinProcess} />
+      {step.entry.block && <ToolMedia {...shared} block={step.entry.block} />}
+    </ProcessFragment></BlockBoundary>;
+    if (step.kind === 'user') return <BlockBoundary><MainNode {...shared} boundary={boundary} nodeKey={step.nodeKey} /></BlockBoundary>;
+    return <Fragment>
+      <BlockBoundary><ProcessNode useChat={props.useChat} t={props.t} nodeKey={step.nodeKey} open={processOpen} motion={motion} onRead={pinProcess} returnFocusTo={processButton} /></BlockBoundary>
+      <BlockBoundary><MainNode {...shared} boundary={boundary} nodeKey={step.nodeKey} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} /></BlockBoundary>
+    </Fragment>;
+  };
   return <section className={css.turn} data-reader-turn={group.turn ?? 'unresolved'} data-reader-turn-state={boundary.status} data-reader-turn-result={boundary.reason ?? undefined}>
     {startsWithUser && <BlockBoundary><MainNode {...shared} boundary={boundary} nodeKey={group.keys[0]} /></BlockBoundary>}
     {hasProcess && <Disclosure open={expanded} onChange={setExpanded} controls={flowId} buttonRef={processButton}
@@ -488,16 +523,18 @@ const TurnGroup = memo(function TurnGroup({ group, motion, pinnedKeys, selectedP
       <GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />
     </div>}
     <div id={flowId} className={css.mainFlow} data-reader-flow>
-      {flow.map(item => item.kind === 'node' ? <Fragment key={item.key}>
-        <BlockBoundary><ProcessNode useChat={props.useChat} t={props.t} nodeKey={item.nodeKey} open={expanded} motion={motion} onRead={pinProcess} returnFocusTo={processButton} /></BlockBoundary>
-        <BlockBoundary><AssistantNode {...shared} boundary={boundary} nodeKey={item.nodeKey} pinned={pinnedKeys.includes(item.nodeKey)} processOpen={expanded} motion={motion} onRead={pinProcess} returnFocusTo={processButton} /></BlockBoundary>
-        <BlockBoundary><MainNode {...shared} boundary={boundary} nodeKey={item.nodeKey} pinned={pinnedKeys.includes(item.nodeKey)} processOpen={expanded} /></BlockBoundary>
-      </Fragment> : <Fragment key={item.key}>
-        <BlockBoundary><ProcessFragment open={expanded} motion={motion} onRead={pinProcess} returnFocusTo={processButton} nodeKey={item.key} framed>
-          <ToolActivity {...shared} entry={item} motion={motion} turnClosed={boundary.status === 'closed'} onRead={pinProcess} />
-          {item.block && <ToolMedia {...shared} block={item.block} />}
-        </ProcessFragment></BlockBoundary>
-      </Fragment>)}
+      {liveItems.flatMap(item => {
+        if (item.kind === 'fold') {
+          const foldOpen = foldOpenByKey[item.key] ?? false;
+          return [
+            <PriorChainFold key={item.key} summary={item.summary} motion={motion} foldOpen={foldOpen}
+              onFoldOpenChange={value => setFoldOpenByKey(current => current[item.key] === value ? current : { ...current, [item.key]: value })}
+              processKey={item.key} processOpen={expanded} onRead={pinProcess} returnFocusTo={processButton} />,
+            ...item.steps.map(step => <Fragment key={step.key}>{renderStep(step, expanded && foldOpen, true)}</Fragment>),
+          ];
+        }
+        return [<Fragment key={item.key}>{renderStep(item.step, expanded, false)}</Fragment>];
+      })}
     </div>
     {showDeliverablesRow(boundary.status, deliverables) && <DeliverablesRow deliverables={deliverables} openFile={props.openFile} revealFile={props.revealFile} />}
     {showTerminalNotice && <div className={css.notice} data-reader-terminal>{terminal}</div>}
@@ -689,7 +726,9 @@ export function Reader(props: ReaderProps) {
         <strong>{pending.kind === 'question' ? '需要你回答一个问题' : '需要你的确认'}</strong>
         <span>请在下方原生操作区处理。此提示不会收进执行过程。</span>
       </div>}
-      {scroll.detached && <div className={css.jumpDock}><button type="button" className={css.jump} onClick={scroll.jump}>↓ 回到最新</button></div>}
+      {scroll.detached && <div className={css.jumpDock}><button type="button" className={css.jump} aria-label="回到底部" title="回到底部" onClick={scroll.jump}>
+        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M3 5.5 7 9.5 11 5.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button></div>}
     </div>
   </div></StreamMotionContext.Provider>;
 }

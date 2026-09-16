@@ -4,6 +4,12 @@
 
 Stock DeepSeek Harness install: `dsh plugin --profile web add github:aa2246740/dsh-better-display`, then restart that Host and reload. Ships `dsh.bundle.patch` → `cordis.patch.yml` and committed `lib/`. No `prepare`.
 
+Fusion try-branch (not on `main`): leftover [#5](https://github.com/aa2246740/dsh-better-display/pull/5) reading-tab bits plus experimental [#2](https://github.com/aa2246740/dsh-better-display/pull/2) live fold-on-next-reasoning, resolved onto current `main`.
+
+- **Keep current TimelineRail**: main already has the newer turn rail (`loadThrough`, composer-safe landing). Do not replace it with #5's `TurnRail`.
+- **#5 leftovers**: skip host-synthetic `turn-process` JSON cards; render `/goal` `command-input` as labeled command text; system-prompt body uses a dedicated scrollport; back-to-bottom is a 34px chevron at the native 25px near-bottom threshold; scroll-anchor capture is rAF-coalesced.
+- **#2 live fold**: while a turn is open, a later reasoning step collapses earlier chain steps into one `思考×N` disclosure. Body/tool alone never folds. Mid-turn user/steering resets the chain. Successful turn-close still uses the existing final-answer fold.
+
 ## 0.2.1
 
 - **Rail jump no longer lifts the composer**: the right-hand turn rail lands on `[data-conversation-scroll]` the same way official ChatView does. `scrollIntoView` was also scrolling ancestor boxes, so jumping to the top of history and then back to the latest turn left the sticky input card stranded up the column.

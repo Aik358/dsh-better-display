@@ -18,6 +18,8 @@ During a turn, show its real process in chronological order. Starting body outpu
 
 Only a successful public turn-close boundary folds process and intermediate commentary, leaving the final answer in place. Failures, interruptions, unknown terminal states and approval requests remain visible. A live text selection defers folding until the selection is released. A historical turn can always be reopened.
 
+While a turn is still open, a later reasoning step may collapse earlier steps of the same chain into one disclosure (`思考×N`). Body or tool alone never triggers that live fold. A mid-turn user insert or steering message resets the chain. This is presentation-only and does not change the successful-turn final-answer fold.
+
 ## Long reasoning
 
 A neutral card bounds the transcript without replacing it. The viewport mask is 28px. Follow advances by two actual line heights every 840ms, with a 500ms transform using `cubic-bezier(.22,1,.36,1)`; clamp only at the current real end. Never accelerate through a burst, clone the transcript or loop old text.

@@ -87,20 +87,22 @@ export function StatusText({ text, motion, shimmer = false }: { text: string; mo
   </span>;
 }
 
-export function Disclosure({ open, onChange, label, status, controls, buttonRef }: {
+export function Disclosure({ open, onChange, label, status, controls, buttonRef, ariaLabel, showMeta = true }: {
   open: boolean; onChange: (value: boolean) => void; label: ReactNode;
-  status?: string; controls: string; buttonRef: RefObject<HTMLButtonElement>;
+  status?: string; controls?: string; buttonRef: RefObject<HTMLButtonElement>;
+  ariaLabel?: string; showMeta?: boolean;
 }) {
+  const name = ariaLabel ?? '思考与过程';
   return <div className={css.disclosure} data-reader-disclosure data-expanded={open}>
-    <button ref={buttonRef} type="button" className={css.disclosureButton} aria-label={`${open ? '收起' : '展开'}思考与过程`} aria-expanded={open} aria-controls={controls} onClick={() => onChange(!open)}>
+    <button ref={buttonRef} type="button" className={css.disclosureButton} aria-label={`${open ? '收起' : '展开'}${name}`} aria-expanded={open} {...(controls ? { 'aria-controls': controls } : {})} onClick={() => onChange(!open)}>
       {label}
       <svg className={css.chevron} data-open={open} viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
     </button>
-    <div className={css.processMeta} data-reader-process-meta data-open={open} aria-hidden={!open}>
+    {showMeta && <div className={css.processMeta} data-reader-process-meta data-open={open} aria-hidden={!open}>
       <div className={css.processMetaInner}><div className={css.processMetaLine}>
         <span>思考与过程</span>{status && <span className={css.meta}>{status}</span>}
       </div></div>
-    </div>
+    </div>}
   </div>;
 }
 
@@ -209,23 +211,33 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     };
     const capture = () => {
       const top = scroll.getBoundingClientRect().top;
-      const candidate = Array.from(content.querySelectorAll<HTMLElement>('[data-reader-anchor]')).find(element => element.getBoundingClientRect().bottom > top + 8);
+      const candidates = content.querySelectorAll<HTMLElement>('[data-reader-anchor]');
+      let candidate: HTMLElement | null = null;
+      for (let index = 0; index < candidates.length; index++) {
+        const element = candidates[index];
+        if (element.getBoundingClientRect().bottom > top + 8) { candidate = element; break; }
+      }
       anchor.current = candidate ? { element: candidate, top: candidate.getBoundingClientRect().top } : null;
+    };
+    // Anchor capture is only consumed while detached; coalesce DOM scans to one per frame.
+    let captureFrame = 0;
+    const scheduleCapture = () => {
+      if (captureFrame) return;
+      captureFrame = requestAnimationFrame(() => { captureFrame = 0; capture(); });
     };
     const onScroll = () => {
       // While a follow animation is actively driving scroll, do not cancel following midway.
       if (followFrame !== 0) return;
       // Our easing frames must not be mistaken for a user leaving the bottom.
       if (lastWrittenTop !== null && Math.abs(scroll.scrollTop - lastWrittenTop) < 1) return;
-      const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 72;
+      const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 25;
       following.current = atBottom;
       setDetached(!atBottom);
-      if (!atBottom) { cancelAnimationFrame(followFrame); followFrame = 0; }
-      capture();
+      if (!atBottom) { cancelAnimationFrame(followFrame); followFrame = 0; scheduleCapture(); }
     };
     const onWheel = (event: WheelEvent) => {
       cancelAnimationFrame(followFrame); followFrame = 0; lastWrittenTop = null;
-      if (event.deltaY < 0) { following.current = false; setDetached(true); capture(); }
+      if (event.deltaY < 0) { following.current = false; setDetached(true); scheduleCapture(); }
     };
     const onTouch = () => {
       cancelAnimationFrame(followFrame); followFrame = 0; lastWrittenTop = null;
@@ -234,7 +246,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       if (event.target instanceof HTMLElement && event.target.closest('textarea,input,[contenteditable=true]')) return;
       if (['PageUp', 'Home', 'ArrowUp'].includes(event.key)) {
         cancelAnimationFrame(followFrame); followFrame = 0; lastWrittenTop = null;
-        following.current = false; setDetached(true); capture();
+        following.current = false; setDetached(true); scheduleCapture();
       }
     };
     const writeTop = (top: number) => { scroll.scrollTop = top; lastWrittenTop = scroll.scrollTop; };
@@ -271,7 +283,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     scroll.addEventListener('touchmove', onTouch, { passive: true });
     scroll.addEventListener('keydown', onKey);
     return () => {
-      cancelAnimationFrame(firstFrame); cancelAnimationFrame(followFrame); observer.disconnect();
+      cancelAnimationFrame(firstFrame); cancelAnimationFrame(followFrame); cancelAnimationFrame(captureFrame); observer.disconnect();
       scroll.removeEventListener('scroll', onScroll); scroll.removeEventListener('wheel', onWheel);
       scroll.removeEventListener('touchstart', onTouch); scroll.removeEventListener('touchmove', onTouch);
       scroll.removeEventListener('keydown', onKey);

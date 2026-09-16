@@ -126,6 +126,8 @@
 .toolDetailNote { margin: 0 0 9px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .toolRawLabel { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 500; }
 .toolRaw { margin: 0; max-height: 400px; padding: 12px; overflow: auto; border-radius: 8px; background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-primary); font: 12px/20px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.systemPrompt { margin: 0; max-height: 320px; padding: 12px; overflow: auto; border-radius: 8px; background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-primary); font: 12px/20px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.commandInput { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .toolReceipt .blocks, .toolDocument .blocks { font-size: 13px; line-height: 22px; }
 .toolChildren { margin: 0 14px 12px 24px; padding-left: 12px; border-left: 1px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; gap: 9px; }
 @container (max-width: 420px) { .toolHeading { gap: 7px; padding: 11px 10px 6px; grid-template-columns: 16px minmax(0, 1fr) auto; } .toolHeadingState { gap: 4px; } .toolLedger { padding-left: 33px; padding-right: 10px; } .toolPanel { padding: 10px; } .toolChildren { margin-left: 12px; padding-left: 8px; } }
@@ -243,7 +245,7 @@
 .imageDialog::backdrop { background: var(--dsw-alias-bg-mask-photo); }
 .imageDialog img { max-width: 82vw; max-height: 75vh; display: block; object-fit: contain; }
 .dialogClose { position: absolute; right: 8px; top: 4px; border: 0; background: transparent; color: inherit; width: 32px; height: 32px; border-radius: 8px; font-size: 24px; }
-.jumpDock { position: sticky; bottom: calc(var(--dsh-composer-height, 152px) + 16px); align-self: flex-end; height: 0; z-index: 8; }
+.jumpDock { position: sticky; bottom: calc(var(--dsh-composer-height, 152px) + 16px); height: 0; z-index: 8; display: flex; justify-content: flex-end; pointer-events: none; }
 .deliverablesRoot { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: start; column-gap: 10px; margin-top: 14px; font-size: 13px; line-height: 22px; }
 .deliverablesLabel { grid-column: 1; grid-row: 1; color: var(--dsw-alias-label-tertiary); font-size: 12px; padding-top: 2px; font-weight: 500; }
 .deliverablesLane { grid-column: 2; grid-row: 1; min-width: 0; }
@@ -265,7 +267,8 @@
 .deliverablesShowFolder { border: 1px solid transparent; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 12px; cursor: pointer; padding: 2px 7px; border-radius: 5px; display: inline-flex; align-items: center; gap: 4px; transition: all 150ms ease; }
 .deliverablesShowFolder:hover { color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-interactive-bg-hover); border-color: var(--dsw-alias-border-l2); }
 .deliverablesShowFolder[data-status=opened] { color: #10b981; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.08); }
-.jump { transform: translateY(-100%); border: 1px solid var(--dsw-alias-border-l2); border-radius: 20px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; padding: 7px 13px; box-shadow: 0 2px 8px var(--dsw-alias-border-l1); }
+.jump { margin-top: -34px; flex: none; width: 34px; height: 34px; display: flex; justify-content: center; align-items: center; padding: 0; border: 0; border-radius: 100px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-button-floating-fill, var(--dsw-alias-bg-base)); box-shadow: var(--dsw-elevation-panel, 0 2px 8px var(--dsw-alias-border-l1)); pointer-events: auto; }
+.jump:hover { background: var(--dsw-alias-button-floating-hover, var(--dsw-alias-interactive-bg-hover)); }
 [data-motion=off] .chevron, [data-motion=off] .imageOpen img, [data-motion=off] .processMeta { transition: none; }
 @media (prefers-reduced-motion: reduce) { .chevron, .imageOpen img, .processMeta { transition: none; } }
 @media (pointer: coarse) { .disclosureButton { min-height: 44px; } }
