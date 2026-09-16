@@ -77,6 +77,27 @@ function searchFiles(value: unknown): SearchFileGroup[] | null {
   return files;
 }
 
+function CustomToolWrapper({ Component, block, toolName, cwd, openFile }: {
+  Component: any;
+  block: any;
+  toolName: string;
+  cwd?: string;
+  openFile?: (path: string) => Promise<void> | void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // If the component renders a collapsed disclosure row (like DiffCard with role="button" and aria-expanded="false"),
+    // expand it automatically once so details are immediately visible inside ResultView.
+    const row = containerRef.current?.querySelector<HTMLElement>('[role="button"][aria-expanded="false"]');
+    if (row) row.click();
+  }, []);
+  return (
+    <div ref={containerRef} data-reader-tool-custom>
+      <Component block={block} toolName={toolName} cwd={cwd} openFile={openFile} />
+    </div>
+  );
+}
+
 function ResultView({ entry, model, phase, ...render }: BlockRenderProps & { entry: ToolActivityEntry; model: ReturnType<typeof activitySummary>; phase: ToolPhase }) {
   if ((model.name === 'render_ui' || model.name === 'show_widget') && typeof model.args?.html === 'string') {
     return <McpAppFrame html={model.args.html as string} title={typeof model.args.title === 'string' ? (model.args.title as string) : undefined} fillComposer={render.fillComposer} />;
@@ -92,7 +113,7 @@ function ResultView({ entry, model, phase, ...render }: BlockRenderProps & { ent
 
   const CustomToolView = render.getToolView?.(model.name);
   if (CustomToolView) {
-    return <div data-reader-tool-custom><CustomToolView block={block} toolName={model.name} cwd={model.cwd} openFile={render.openFile} /></div>;
+    return <CustomToolWrapper Component={CustomToolView} block={block} toolName={model.name} cwd={model.cwd} openFile={render.openFile} />;
   }
 
   if (model.category === 'terminal') {
