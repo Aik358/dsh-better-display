@@ -144,15 +144,29 @@ export function ProcessFragment({ open, motion, onRead, returnFocusTo, nodeKey, 
       { duration: 380, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'both' },
     );
     running.current = animation;
-    animation.onfinish = () => {
-      if (running.current !== animation) return;
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      if (running.current === animation) running.current = null;
       delete document.body.dataset.readerFolding;
-      running.current = null;
       animation.cancel();
       setPresent(open);
     };
+    animation.onfinish = settle;
+    // `fill: 'both'\` pins the opening keyframe (height 0, opacity 0), so while this
+    // animation runs the body is *invisible* no matter what the element's style says.
+    // An animation that never finishes — cancelled by a re-run, an unmount, or a
+    // compositor that drops it — would then leave the row looking like it refused to
+    // open, which is exactly the reported symptom. Cancel is only safe once the
+    // state change has been committed, so the deadline does both.
+    const deadline = window.setTimeout(settle, 380 + 240);
+    return () => {
+      window.clearTimeout(deadline);
+      running.current?.cancel();
+      delete document.body.dataset.readerFolding;
+    };
   }, [open, motion, returnFocusTo]);
-  useEffect(() => () => { delete document.body.dataset.readerFolding; running.current?.cancel(); }, []);
   if (!open && !present) return null;
   return <div ref={body} className={css.disclosureBody} data-reader-process data-reader-process-key={nodeKey} data-ud-motion="reader-process-size"
     aria-hidden={!open} onPointerDown={() => { if (open) onRead(); }} onFocusCapture={() => { if (open) onRead(); }} {...(!open ? { inert: '' } : {})}>

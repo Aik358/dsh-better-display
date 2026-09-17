@@ -66,8 +66,22 @@ function FlowCell({ hidden, instant, motion, rowKey, children, summary = false }
     // committed the removal, so the cell snaps back to full height for one frame
     // — the flash before it disappears. The state change alone retires it; the
     // cleanup below cancels the animation once that has actually rendered.
-    animation.onfinish = () => { setPresent(!hidden); release(); };
-    return () => { animation.cancel(); release(); };
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      setPresent(!hidden);
+      release();
+    };
+    animation.onfinish = settle;
+    // \`fill: 'both'\` pins the opening keyframe for the whole run, so if this
+    // animation never advances the cell stays at height 0 and opacity 0: the row is
+    // in the DOM but reads as "clicked it and nothing happened". A cancelled
+    // animation, or one inside a subtree the compositor skips, never fires
+    // onfinish. Fall back to the state change on a deadline; the cleanup then
+    // cancels the animation and drops the fill.
+    const deadline = window.setTimeout(settle, 220 + 240);
+    return () => { window.clearTimeout(deadline); animation.cancel(); release(); };
     // `present` is a dependency so that committing it re-runs this effect: the
     // cleanup then cancels the finished animation *after* the removal has been
     // applied, which is the only moment the fill can be dropped safely. Without

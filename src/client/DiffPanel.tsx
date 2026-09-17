@@ -38,8 +38,22 @@ function MorphPanel({ open, children, onSettled, onClosed }: {
       duration: FOLD_TIMING.reveal + FOLD_TIMING.settle,
       easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both',
     });
-    animation.onfinish = () => { release(); if (open) onSettled?.(element); else onClosed(); };
-    return () => { animation.cancel(); release(); };
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      release();
+      if (open) onSettled?.(element);
+      else onClosed();
+    };
+    animation.onfinish = settle;
+    // `fill: 'both'` holds the opening keyframe (height 0, opacity 0) for as long as
+    // the animation is the thing driving the element. If it is cancelled — a re-run,
+    // an unmount, a subtree the compositor skips — onfinish never fires and the
+    // panel stays at zero height and zero opacity while sitting in the DOM, which
+    // reads as a badge that opens nothing. Commit the end state on a deadline too.
+    const deadline = window.setTimeout(settle, FOLD_TIMING.reveal + FOLD_TIMING.settle + 240);
+    return () => { window.clearTimeout(deadline); animation.cancel(); release(); };
   }, [open]);
   return <span ref={ref} className={css.diffOverlay}>{children}</span>;
 }
