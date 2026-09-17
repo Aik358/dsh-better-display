@@ -12,7 +12,7 @@ import { StreamMotionContext } from './streaming.js';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
 import { WaitingStatus } from './WaitingStatus.js';
-import { WAIT_AFTER, waitingAnchor } from './waiting-clock.js';
+import { handsBackToModel, waitingAnchor } from './waiting-clock.js';
 import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
@@ -240,18 +240,33 @@ const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, pr
   }
   if (isNode(node, 'manual-compaction') || isNode(node, 'compaction')) return null;
   if (node.kind === 'context' || node.kind === 'turn-tail' || node.kind === 'system-prompt' || node.kind === 'turn-process') return null;
-  if ((node.kind as string) === 'command-input') {
-    const data = node.data as { readonly text: string };
-    return <div className={css.user} data-reader-anchor data-reader-key={nodeKey}>
-      <p className={css.meta}>命令输入</p>
-      <p className={css.commandInput}>{data.text}</p>
-    </div>;
-  }
+  // No 'command-input' branch: that string is not a chat node kind in any released
+  // host (it appears nowhere in the installed packages), so a slash command arrives
+  // as 'command' above and is rendered there. Keeping the branch only made the file
+  // look like it handled a case that cannot occur.
   return <div className={css.unknown} data-reader-anchor>
     <p>此记录类型暂未接入阅读页：{node.kind}</p>
     <JsonBlock label="查看原始记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />
   </div>;
 });
+
+/**
+ * Sub-agents this turn dispatched, read from the host's own Turn-process row.
+ *
+ * The host already derives this from the dispatch tree (`subagentCount` on
+ * `TurnProcessChatData`), so counting calls here would only risk disagreeing with
+ * it. The row is otherwise hidden by the reader, which is why this is the one place
+ * its counters are read.
+ */
+function subagentCount(snapshot: { nodes: { get(key: string): ChatConversationViewNode | undefined } }, keys: readonly string[]): number {
+  for (const key of keys) {
+    const node = snapshot.nodes.get(key);
+    if (!node || node.kind !== 'turn-process') continue;
+    const value = (node.data as { subagentCount?: unknown }).subagentCount;
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+  }
+  return 0;
+}
 
 function GroupStatus({ group, sessionId, useChat, useSessionPendingInteraction, motion }: Pick<ReaderProps, 'sessionId' | 'useChat' | 'useSessionPendingInteraction'> & { group: ReaderGroup; motion: boolean }) {
   const pending = useSessionPendingInteraction(snapshot => snapshot.get(sessionId));
@@ -266,7 +281,10 @@ function GroupStatus({ group, sessionId, useChat, useSessionPendingInteraction, 
     if (pending !== undefined) return '等待你的操作';
     const current = turn.steps.at(-1)?.data.get('assistant-step');
     const last = current?.blocks.at(-1);
-    if (current?.status === 'running' && last?.kind === 'tool-call') return preparingLabel(last.name);
+    if (current?.status === 'running' && last?.kind === 'tool-call') {
+      const spawned = subagentCount(snapshot, group.keys);
+      return spawned ? `${preparingLabel(last.name)}·${spawned} 个子代理` : preparingLabel(last.name);
+    }
     for (let index = group.keys.length - 1; index >= 0; index--) {
       const node = snapshot.nodes.get(group.keys[index]);
       if (!node) continue;
@@ -614,8 +632,9 @@ export function Reader(props: ReaderProps) {
     // 3. 球在模型脚下：用户刚发言，或工具已返回、上下文已注入、命令已执行。
     //    这些时刻模型随时可能卡住，正是要计时的地方；工具执行期间不计时，
     //    因为那时忙的是工具而不是模型。
-    const modelOwesResponse = lastNode.kind === 'user' || lastNode.kind === 'steering'
-      || WAIT_AFTER.has(lastNode.kind);
+    //    handsBackToModel 内部按 chat 层 kind 判定，并区分「工具已返回」与
+    //    「工具仍在跑」——后者不算等待。
+    const modelOwesResponse = handsBackToModel(lastNode);
     if (!modelOwesResponse) return false;
 
     // 轮次已结束就没什么可等的。

@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Compatibility and liveness
+
+- A wait now restarts when a tool returns. The handover set named kinds from the
+  conversation contract (`tool-result`) while the reader matches against the chat
+  layer's kinds, where a returned tool is the `tool-call` row whose `data.root`
+  carries a result. No node ever had the old name, so the branch was dead and a
+  returned tool never restarted the clock. The set and every kind it reasons about
+  are now typed against the host's own kind union, so a wrong name fails `tsc`
+  instead of failing silently at runtime, and a tool that is still running is
+  explicitly not a wait.
+- The fold choreography can no longer stall. Each phase advances on animation
+  promises and rendered frames, and a cancelled animation rejects while a hidden
+  tab delivers no frames — either one used to leave the machine in a non-idle
+  phase forever, which holds the frame source at the shown snapshot and pauses the
+  text reveal, so the turn looked stuck until the view remounted. Every phase now
+  also has a wall-clock deadline that forces the next phase.
+- While the choreography holds the reveal, the stream buffer keeps absorbing the
+  source instead of returning early, so text never resumes from a stale target
+  once the fold settles.
+- Status shows how many sub-agents the turn dispatched, read from the host's own
+  turn-process row instead of being counted again here.
+- Drop the `command-input` render branch: that string is not a chat node kind in
+  any released host, so it only made the file look like it handled a case that
+  cannot occur.
+
 ### Reading and folding
 
 - A later reasoning step folds only the finished process run it follows. The run

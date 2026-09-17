@@ -1,7 +1,24 @@
 import type { LiveStep, LiveTurnItem } from './live-turn.js';
 
 /** Presentation clock, not model/network time. */
-export const FOLD_TIMING = { collapse: 320, count: 160, settle: 80, reveal: 180 } as const;
+export const FOLD_TIMING = {
+  collapse: 320,
+  count: 160,
+  settle: 80,
+  reveal: 180,
+  /**
+   * Slack added to every phase deadline before the watchdog forces the next phase.
+   *
+   * The choreography advances on animation promises and rendered frames. Both are
+   * best-effort: a cancelled animation *rejects* and a compositor that never
+   * finishes one leaves its promise pending, while a backgrounded tab stops
+   * delivering frames. Without a deadline the machine would sit in a non-idle
+   * phase forever, and a non-idle phase freezes both the frame source and the text
+   * reveal, so the turn would look stuck until a remount. This is the liveness
+   * guarantee that does not depend on any of them.
+   */
+  watchdogSlack: 240,
+} as const;
 export type FoldPhase = 'idle' | 'collapse' | 'count' | 'settle' | 'reveal';
 export type FlowRow =
   | { kind: 'summary'; key: string; item: Extract<LiveTurnItem, { kind: 'fold' }> }

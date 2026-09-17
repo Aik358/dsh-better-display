@@ -36,3 +36,19 @@ test('disabling fold preserves all source steps; phase budget is bounded', () =>
   assert.equal(items.some(item => item.kind === 'fold'), false);
   assert.equal(FOLD_TIMING.collapse + FOLD_TIMING.count + FOLD_TIMING.settle, 560);
 });
+
+// Every phase must be escapable without cooperating animations or frames. A
+// non-idle phase holds the frame source at `shown` and pauses the text reveal, so
+// a phase that cannot advance freezes the whole turn until the view remounts —
+// which is exactly the reported "output stalls at the end, refresh fixes it".
+// The slack is what makes the deadline strictly later than the nominal phase.
+test('every phase has a bounded budget and a watchdog strictly beyond it', () => {
+  assert.ok(FOLD_TIMING.watchdogSlack > 0, 'watchdog slack must be positive');
+  for (const phase of ['collapse', 'count', 'settle', 'reveal'] as const) {
+    const budget = FOLD_TIMING[phase];
+    assert.ok(Number.isFinite(budget) && budget > 0, phase + ' needs a positive budget');
+    assert.ok(budget + FOLD_TIMING.watchdogSlack > budget, phase + ' deadline must exceed its budget');
+    // Far below any plausible user perception of "stuck".
+    assert.ok(budget + FOLD_TIMING.watchdogSlack < 1000, phase + ' must not read as a stall');
+  }
+});
