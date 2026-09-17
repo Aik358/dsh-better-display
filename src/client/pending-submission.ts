@@ -15,6 +15,13 @@ export interface PendingSubmissionLike {
   }[] | null;
 }
 
+export interface PendingSubmissionEcho extends PendingSubmissionLike {
+  readonly requestId: string;
+  readonly text?: string;
+  readonly time?: number;
+  readonly placement?: string;
+}
+
 export function asReadonlyArray<T>(value: unknown): readonly T[] {
   return Array.isArray(value) ? value as readonly T[] : [];
 }

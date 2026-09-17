@@ -12,7 +12,7 @@ import { StreamMotionContext } from './streaming.js';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
-import { asReadonlyArray, pendingSubmissionImages } from './pending-submission.js';
+import { asReadonlyArray, pendingSubmissionImages, type PendingSubmissionEcho } from './pending-submission.js';
 import { WaitingStatus } from './WaitingStatus.js';
 import { waitingAnchor } from './waiting-clock.js';
 import { ContextInjectionRow } from './native/ContextInjectionRow.js';
@@ -585,7 +585,7 @@ export function Reader(props: ReaderProps) {
   const hasMore = props.useSession(snapshot => snapshot.hasMore);
   const loadingOlder = props.useSession(snapshot => snapshot.loadingOlder);
   const pendingSubmissions = props.useSession(snapshot => snapshot.pendingSubmissions);
-  const pendingList = asReadonlyArray<{ requestId: string; text?: string; time?: number; placement?: string }>(pendingSubmissions);
+  const pendingList = asReadonlyArray<PendingSubmissionEcho>(pendingSubmissions);
   const waitAnchor = waitingAnchor(order, key => nodes.get(key), pendingList);
   const motionPreference = props.useStore(state => state.motion);
   const motion = useMotionAllowed(motionPreference);
