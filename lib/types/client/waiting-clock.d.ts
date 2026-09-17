@@ -9,7 +9,7 @@ type InputNode = {
 };
 type Submission = {
     requestId: string;
-    time: number;
+    time?: number;
     placement?: string;
 };
 /**

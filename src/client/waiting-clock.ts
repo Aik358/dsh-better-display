@@ -2,7 +2,7 @@ import type { ChatNodeKind } from '@deepseek-ai/dsh-client-ui-chat/client';
 
 export interface WaitingAnchor { key: string; time: number | null }
 type InputNode = { kind: string; data: unknown };
-type Submission = { requestId: string; time: number; placement?: string };
+type Submission = { requestId: string; time?: number; placement?: string };
 const timestamp = (value: number | undefined): number | null => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 
 /**

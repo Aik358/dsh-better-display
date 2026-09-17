@@ -5,9 +5,9 @@ These rules are mandatory for every Cloud Agent turn in this repository. Soft wo
 ## Model
 
 - Only use Grok 4.6 (`cursor-grok-4.6-*`).
-- Prefer Grok. Composer is the only fallback if Grok is unavailable.
+- Prefer Grok or Composer only. Composer is the only fallback if Grok is unavailable.
 - Never Claude, Sonnet, Opus, GPT, or Gemini — including via Task, subagents, or "just this one helper".
-- Subagents inherit the parent model (`model: inherit`). Do not pass another model slug.
+- Subagents inherit the parent model (`model: inherit`). Do not pass a `model` argument.
 
 ## Task / computer use / browser
 

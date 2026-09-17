@@ -26,6 +26,17 @@
 - Drop the `command-input` render branch: that string is not a chat node kind in
   any released host, so it only made the file look like it handled a case that
   cannot occur.
+- Give every animated disclosure a wall-clock deadline as well. `fill: 'both'`
+  pins the opening keyframe, so a Web Animation that never reaches `onfinish`
+  (cancelled, unmounted, or skipped by the compositor) left the row in the DOM at
+  zero height and zero opacity — clicking it looked like nothing happened.
+- Add a Better Display settings section: deliverables still open in the system app
+  by default, with an optional right-Sidebar preview, plus generative-mcpapps
+  skill-root detection and install guidance.
+- Guard pending-submission image echoes so a text-only send cannot crash
+  `conversation.view` (`images` / `attachments` may be missing).
+- Install guidance names only conventional relative roots (`.dsh/skills`,
+  `.agents/skills`) and never prints host home or plugin pack absolutes.
 
 ### Reading and folding
 
