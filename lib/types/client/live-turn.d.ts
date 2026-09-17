@@ -54,5 +54,17 @@ export declare function splitChain(chain: readonly LiveStep[]): {
 };
 /** Expand readerFlow into source-ordered live steps using existing block boundaries. */
 export declare function segmentLiveTurn(flow: readonly ReaderFlowEntry[], get: (key: string) => ChatConversationViewNode | undefined): LiveStep[];
-export declare function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold?: boolean): LiveTurnItem[];
+/** A readable one-line digest of one finished process run. */
+export declare function processSummary(steps: readonly LiveStep[]): string;
+/**
+ * Process-only chains: prose is never folded, and process folds one finished
+ * sub-session at a time. The live run keeps streaming in full; as soon as the
+ * next thought opens, the previous run collapses into its digest. A closed turn
+ * folds its trailing run too, so it reads as alternating digests and prose.
+ * @param chain - source-ordered steps since the last user message.
+ * @param turnOpen - true while the turn is still producing.
+ * @returns items where finished process runs are folded.
+ */
+export declare function splitProcessChain(chain: readonly LiveStep[], turnOpen: boolean): LiveTurnItem[];
+export declare function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold?: boolean, processOnly?: boolean): LiveTurnItem[];
 //# sourceMappingURL=live-turn.d.ts.map

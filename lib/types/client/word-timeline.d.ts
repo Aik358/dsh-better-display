@@ -5,6 +5,10 @@ export declare const WORD_MOTION: {
     readonly blur: 1;
     readonly easing: "cubic-bezier(0.22, 1, 0.36, 1)";
     readonly maxDelay: 240;
+    /** Floor for the per-word cadence once a batch is compressed. */
+    readonly minGap: 3;
+    /** One paint's words should land inside this window, however many arrive. */
+    readonly batchMs: 90;
 };
 export interface RevealingWord {
     key: number;

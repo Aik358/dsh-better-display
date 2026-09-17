@@ -36,6 +36,42 @@ export declare function executionFacts(block: ToolCallBlock | undefined): {
     exitCode?: number;
     signal?: string;
 };
+/**
+ * Added/removed line counts for a mutation call, or null when there is no diff
+ * to show.
+ *
+ * The result metadata is preferred when the host attaches one. Not every host
+ * build does — a session log may carry no hunk payload at all — so the call's own
+ * arguments are read as the fallback, which is also what the official row uses
+ * while a write is still pending. A call whose arguments hold none of these
+ * fields (a read, a listing) yields null and shows no badge.
+ */
+/**
+ * One changed file, in the exact shape the official `DiffBlock` primitive takes:
+ * `oldText` is null for a pure insertion, and `newText` is always a string. Line
+ * counts are derived from these two sides, never stored alongside them.
+ */
+export interface DiffHunk {
+    path: string;
+    oldText: string | null;
+    newText: string;
+}
+export declare function callDiffHunks(block: ToolCallBlock | undefined, args?: Record<string, unknown>, name?: string): DiffHunk[];
+/** Added/removed line counts for one call, or null when there is nothing to show. */
+export declare function diffTotals(block: ToolCallBlock | undefined, args?: Record<string, unknown>, name?: string): {
+    added: number;
+    removed: number;
+} | null;
+/** Counts the lines on each side, under the same rule the official block uses. */
+export declare function diffLineTotals(hunks: readonly DiffHunk[]): {
+    added: number;
+    removed: number;
+};
+/** Every changed file across a folded run of steps, in the order they ran. */
+export declare function foldDiffHunks(steps: readonly {
+    kind: string;
+    entry?: ToolActivityEntry;
+}[]): DiffHunk[];
 export declare function activityPhase(entry: Pick<ToolActivityEntry, 'block' | 'draft'>, turnClosed?: boolean): ToolPhase;
 export declare function activitySummary(entry: Pick<ToolActivityEntry, 'block' | 'draft'>): {
     name: string;
