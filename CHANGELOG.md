@@ -91,6 +91,10 @@
   step-and-hold: it used to advance two lines every ~1.3 seconds no matter how
   fast the text arrived, which is what made the pane look like it was lagging
   behind a fast model.
+### Host DOM hooks
+
+- Keep ChatView's `data-chat-flow=""` hook on the Reader column so skins that hide `[data-composer-seat]` when the scrollport has no chat-flow (maid-atelier, phoebe-atelier, and others) still show the composer in reading view.
+
 ## 0.1.1 — 2026-09-16
 
 The accepted reading-view integration, including the work consolidated from PRs #2, #5 and #8. Earlier `0.2.0` / `0.2.1` headings were unpublished development notes; those changes ship in this release, not as separate published versions.

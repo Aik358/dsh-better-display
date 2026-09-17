@@ -46,6 +46,10 @@ Manual reading, selection and keyboard access take precedence over automatic fol
 
 Trusted plugins may register `dsh-better-display.block`. Native content remains the fallback. Generative MCP Apps (SEP-1865 / `io.modelcontextprotocol/ui`) are supported via an isolated, sandboxed iframe (`sandbox="allow-scripts allow-forms"`, strictly without `allow-same-origin`) communicating via bidirectional JSON-RPC `postMessage` (`ui/initialize`, `ui/resize`, `ui/update-model-context`, `ui/submit`).
 
+## Host DOM hooks
+
+Reader replaces ChatView's message list, not the native conversation chrome. The enclosing `[data-conversation-scroll]` and sticky `[data-composer-seat]` stay host-owned. ChatView marks its column with `data-chat-flow=""`. Third-party skins (maid-atelier, phoebe-atelier, and others) treat a scrollport without that hook as inspect-only and hide the composer. Reader keeps the same empty `data-chat-flow` attribute on its column so those skins still see an interactive conversation. Turns stay on `[data-reader-turn]`; Reader does not emit native `[data-chat-flow-kind]` rows.
+
 ## Fold choreography contract (2026-09-16)
 
 Single-agent implementation; preserve existing type, colors, source order and one-column reading layout. The memory cue is causality, not ornament: shrink → count → pause → continue. No bouncing capsule, scale-squashed text or parallel entrance spectacle.
