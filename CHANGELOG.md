@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add a Better Display settings section: deliverables still open in the system app by default, with an optional right-Sidebar preview, plus generative-mcpapps skill-root detection and install guidance.
 - Keep ChatView's `data-chat-flow=""` hook on the Reader column so skins that hide `[data-composer-seat]` when the scrollport has no chat-flow (maid-atelier, phoebe-atelier, and others) still show the composer in reading view.
 
 ## 0.1.1 — 2026-09-16

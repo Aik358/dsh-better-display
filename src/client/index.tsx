@@ -2,13 +2,16 @@ import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-session-controller/client';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path';
+import * as workspacePathPkg from '@deepseek-ai/dsh-util-workspace-path';
 import { dirname } from './deliverables.js';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import { Reader } from './Reader.js';
 import { createReaderStore } from './store.js';
 import { installReaderEntry } from './entry.js';
+import { installBetterDisplaySettings } from './settings.js';
 import { fillComposerDom } from './mcp-app.js';
+import { fileAddressFor, modeFromSnapshot, openDeliverableFile } from './open-file.js';
 import type { ReaderInjected } from './types.js';
 
 /** Structural face of the sanctioned per-session composer writer. */
@@ -19,6 +22,32 @@ interface ConversationFace {
   input?: { shell?: (id: SessionId) => ComposerShell };
 }
 
+interface SidebarRightFace {
+  openResource?: (address: string, options?: { params?: { line?: number } }) => void;
+}
+
+const officialFileAddressFor = (workspacePathPkg as {
+  fileAddressFor?: typeof fileAddressFor;
+}).fileAddressFor;
+
+async function openWorkspacePath(
+  ctx: Context,
+  path: string,
+): Promise<void> {
+  const remote = ctx.remote as unknown as { session?: { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } } | undefined;
+  const remoteSession = remote?.session
+    ?? (ctx.get?.('remote.session') as unknown as { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } | undefined)
+    ?? ((ctx.get?.('remote') as unknown as { session?: { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } })?.session);
+  if (remoteSession?.openWorkspacePath) {
+    const result = await remoteSession.openWorkspacePath({ path });
+    if (!result?.ok) {
+      console.warn('[dsh-better-display] openWorkspacePath failed:', result?.error?.message);
+    }
+  } else {
+    console.warn('[dsh-better-display] remote.session is not available');
+  }
+}
+
 export type { ReaderBlockOwner } from './types.js';
 export { McpAppFrame } from './McpAppFrame.js';
 export const name = 'dsh-better-display-client';
@@ -26,6 +55,11 @@ export const inject = ['slots', 'sessions', 'conversation', 'remote', 'remote.se
 
 export function apply(ctx: Context): void {
   const store = createReaderStore();
+  // conversation.view is session-scoped, so session persist keys are
+  // `dsh.reader.v1.<sessionId>`. One root instance keeps the open-mode
+  // switch on the unsuffixed `dsh.reader.v1` key.
+  const prefs = store.create();
+  installBetterDisplaySettings(ctx, prefs);
   ctx.slots.inject('conversation.view', function* () {
     yield ctx.slots.register({
     name: 'conversation.view',
@@ -42,6 +76,7 @@ export function apply(ctx: Context): void {
         return current;
       };
       return {
+        openPrefs: prefs,
         loadOlder: async () => { await session().loadOlder(); },
         loadImage: async attachment => {
           const receipt = await session().readAttachment(attachment.attachmentId);
@@ -51,21 +86,23 @@ export function apply(ctx: Context): void {
         openFile: async (path: string) => {
           try {
             const cwd = ctx.sessions?.list?.getSnapshot?.()?.byId[sessionId]?.cwd;
-            const targetPath = path === '.' || path === ''
-              ? (cwd ?? '.')
-              : resolveWorkspacePath(cwd, path);
-            const remote = ctx.remote as unknown as { session?: { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } } | undefined;
-            const remoteSession = remote?.session
-              ?? (ctx.get?.('remote.session') as unknown as { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } | undefined)
-              ?? ((ctx.get?.('remote') as unknown as { session?: { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } })?.session);
-            if (remoteSession?.openWorkspacePath) {
-              const result = await remoteSession.openWorkspacePath({ path: targetPath });
-              if (!result?.ok) {
-                console.warn('[dsh-better-display] openWorkspacePath failed:', result?.error?.message);
-              }
-            } else {
-              console.warn('[dsh-better-display] remote.session is not available');
-            }
+            const sidebar = (
+              ctx.get?.('sidebarRight')
+              ?? (ctx as unknown as { sidebarRight?: SidebarRightFace }).sidebarRight
+            ) as SidebarRightFace | undefined;
+            await openDeliverableFile({
+              path,
+              mode: modeFromSnapshot(prefs),
+              sessionId,
+              cwd,
+              resolveWorkspacePath,
+              openExternal: async (absolutePath) => { await openWorkspacePath(ctx, absolutePath); },
+              openSidebar: typeof sidebar?.openResource === 'function'
+                ? (address) => { sidebar.openResource!(address); }
+                : undefined,
+              fileAddressFor: officialFileAddressFor ?? fileAddressFor,
+              warn: (message, extra) => { console.warn(message, extra); },
+            });
           } catch (error) {
             console.warn('[dsh-better-display] openFile error:', error);
           }

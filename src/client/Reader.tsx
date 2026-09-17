@@ -1,5 +1,5 @@
 import type {} from '@deepseek-ai/dsh-session-turn-outline/types';
-import { Fragment, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { ChatConversationViewNode, ChatNode, ChatNodeKind } from '@deepseek-ai/dsh-client-ui-chat/client';
 import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives';
@@ -11,6 +11,7 @@ import { Disclosure, ProcessFragment, RetiringContent, StatusText, useMotionAllo
 import { StreamMotionContext } from './streaming.js';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
+import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
 import { WaitingStatus } from './WaitingStatus.js';
 import { waitingAnchor } from './waiting-clock.js';
 import { ContextInjectionRow } from './native/ContextInjectionRow.js';
@@ -280,10 +281,11 @@ function GroupStatus({ group, sessionId, useChat, useSessionPendingInteraction, 
   return <StatusText text={text} motion={motion} shimmer={busy} />;
 }
 
-const DeliverableChip = memo(function DeliverableChip({ path, openFile, revealFile }: {
+const DeliverableChip = memo(function DeliverableChip({ path, openFile, revealFile, openMode }: {
   path: string;
   openFile?: (path: string) => Promise<void> | void;
   revealFile?: (path: string) => Promise<void> | void;
+  openMode: DeliverableOpenMode;
 }) {
   const [status, setStatus] = useState<'idle' | 'opened' | 'copied' | 'revealed'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout>>();
@@ -338,7 +340,7 @@ const DeliverableChip = memo(function DeliverableChip({ path, openFile, revealFi
         className={css.chipMain}
         onClick={onOpen}
         onDoubleClick={onOpen}
-        aria-label={`直接在编辑器中打开 ${path}`}
+        aria-label={openMode === 'sidebar' ? `在内置面板中打开 ${path}` : `用系统应用打开 ${path}`}
       >
         {status === 'opened' ? (
           <svg className={css.statusIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor">
@@ -351,7 +353,7 @@ const DeliverableChip = memo(function DeliverableChip({ path, openFile, revealFi
           </svg>
         )}
         <span className={css.deliverableName}>
-          {status === 'opened' ? '已在外部打开' : name}
+          {status === 'opened' ? (openMode === 'sidebar' ? '已在面板打开' : '已在外部打开') : name}
         </span>
       </button>
 
@@ -396,10 +398,11 @@ const DeliverableChip = memo(function DeliverableChip({ path, openFile, revealFi
   );
 });
 
-function DeliverablesRow({ deliverables, openFile, revealFile }: {
+function DeliverablesRow({ deliverables, openFile, revealFile, openMode }: {
   deliverables: readonly string[];
   openFile?: (path: string) => Promise<void> | void;
   revealFile?: (path: string) => Promise<void> | void;
+  openMode: DeliverableOpenMode;
 }) {
   const [folderStatus, setFolderStatus] = useState<'idle' | 'opened'>('idle');
   const onOpenWorkspace = () => {
@@ -418,7 +421,7 @@ function DeliverablesRow({ deliverables, openFile, revealFile }: {
       <div className={css.deliverablesLane}>
         <div className={css.deliverablesRow}>
           {deliverables.slice(0, 8).map(path => (
-            <DeliverableChip key={path} path={path} openFile={openFile} revealFile={revealFile} />
+            <DeliverableChip key={path} path={path} openFile={openFile} revealFile={revealFile} openMode={openMode} />
           ))}
           {deliverables.length > 8 && (
             <span className={css.deliverablesMore}>
@@ -466,6 +469,11 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
   const flow = useMemo(() => readerFlow({ ...group, keys: mainKeys }, turn, key => nodes.get(key)), [nodes, group, mainKeys, turn]);
   const steps = useMemo(() => segmentLiveTurn(flow, key => nodes.get(key)), [flow, nodes]);
   const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold), [steps, boundary, autoFold]);
+  const openMode = deliverableOpenModeOf(useSyncExternalStore(
+    props.openPrefs?.subscribe ?? ((fn: () => void) => { void fn; return () => {}; }),
+    () => props.openPrefs?.getSnapshot().deliverableOpenMode,
+    () => 'external',
+  ));
   const hasProcess = flow.some(item => item.kind === 'tool' || hasProcessContent(nodes.get(item.nodeKey), boundary));
   // Only a real, still-active text selection delays folding. Merely clicking,
   // focusing or scrolling the live card does not create a permanent override.
@@ -558,7 +566,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
     {!hasProcess && boundary.status === 'open' && !isAwaitingModel && <div className={css.disclosure} data-reader-status-only>
       <GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />
     </div>}
-    {showDeliverablesRow(boundary.status, deliverables) && <DeliverablesRow deliverables={deliverables} openFile={props.openFile} revealFile={props.revealFile} />}
+    {showDeliverablesRow(boundary.status, deliverables) && <DeliverablesRow deliverables={deliverables} openFile={props.openFile} revealFile={props.revealFile} openMode={openMode} />}
     {showTerminalNotice && <div className={css.notice} data-reader-terminal>{terminal}</div>}
   </section>;
 });
