@@ -1,3 +1,4 @@
+import type { ChatNodeKind } from '@deepseek-ai/dsh-client-ui-chat/client';
 export interface WaitingAnchor {
     key: string;
     time: number | null;
@@ -12,11 +13,29 @@ type Submission = {
     placement?: string;
 };
 /**
- * Node kinds that hand the turn back to the model: the user speaks, a tool
- * returns, context is injected, a command runs. The model is on the hook from
- * one of these, and can stall there; while a tool is running it is not.
+ * Chat-layer kinds that hand the turn back to the model unconditionally.
+ *
+ * These are `ChatNodeDataMap` keys, NOT conversation-layer `ConversationNode` kinds.
+ * The two layers name the same idea differently: a returned tool is `tool-result`
+ * in the conversation contract, but the row the reader sees is the `tool-call` node.
+ * A name copied from the wrong layer silently disables the branch it guards, so
+ * the `satisfies` below makes the compiler reject any name that is not a real kind.
  */
-export declare const WAIT_AFTER: Set<string>;
+export declare const WAIT_AFTER: Set<ChatNodeKind>;
+/**
+ * Every chat-kind the handover logic reasons about, checked against the host's own
+ * kind union at compile time. Adding a name here that the host does not register
+ * fails `tsc` instead of failing silently at runtime.
+ */
+export declare const HANDOVER_KINDS: readonly ["user", "steering", "context", "model-retry", "tool-call", "command"];
+/**
+ * Does this node leave the model on the hook for the next move?
+ *
+ * A tool or command that is *still running* is not a wait — the tool is the one
+ * working. Only its returned form hands control back, which is exactly the moment
+ * the model can stall.
+ */
+export declare function handsBackToModel(node: InputNode): boolean;
 /**
  * The moment the current wait began.
  *

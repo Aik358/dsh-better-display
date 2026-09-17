@@ -5,6 +5,18 @@ export declare const FOLD_TIMING: {
     readonly count: 160;
     readonly settle: 80;
     readonly reveal: 180;
+    /**
+     * Slack added to every phase deadline before the watchdog forces the next phase.
+     *
+     * The choreography advances on animation promises and rendered frames. Both are
+     * best-effort: a cancelled animation *rejects* and a compositor that never
+     * finishes one leaves its promise pending, while a backgrounded tab stops
+     * delivering frames. Without a deadline the machine would sit in a non-idle
+     * phase forever, and a non-idle phase freezes both the frame source and the text
+     * reveal, so the turn would look stuck until a remount. This is the liveness
+     * guarantee that does not depend on any of them.
+     */
+    readonly watchdogSlack: 240;
 };
 export type FoldPhase = 'idle' | 'collapse' | 'count' | 'settle' | 'reveal';
 export type FlowRow = {
