@@ -32,6 +32,10 @@ test('commits compiled lib entries and does not require a prepare script', () =>
   const clientJs = readFileSync(resolve(root, 'lib/client.js'), 'utf8');
   assert.match(clientJs, /window\.__ModuleLoader__\.load/);
   assert.match(clientJs, /id:\s*"dsh-better-display"/);
+  assert.match(clientJs, /settings\.section/);
+  assert.match(clientJs, /deliverableOpenMode/);
+  assert.match(clientJs, /\.dsh\/skills/);
+  assert.doesNotMatch(clientJs, /submission\.images\.length/);
 });
 
 test('README leads with the official stock one-liner and names pnpm', () => {

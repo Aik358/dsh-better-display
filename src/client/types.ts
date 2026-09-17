@@ -29,8 +29,13 @@ export interface ReaderInjected {
    * composer accepted the text.
    */
   fillComposer: (text: string) => boolean;
-  /** Open a workspace file or directory in the native host editor / file viewer. */
+  /** Open a workspace file or directory; mode comes from the Better Display setting. */
   openFile: (path: string) => Promise<void> | void;
+  /** Root-scoped open-mode snapshot (`dsh.reader.v1`), shared with Settings. */
+  openPrefs?: {
+    getSnapshot: () => { deliverableOpenMode?: import('./open-file.js').DeliverableOpenMode };
+    subscribe: (fn: () => void) => () => void;
+  };
   /** Reveal and highlight a workspace file in macOS Finder or Windows Explorer. */
   revealFile?: (path: string) => Promise<void> | void;
   /** Fork the conversation at a specific message sequence into a new branch session. */
