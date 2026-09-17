@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type {} from './settings-slots.js';
 import { settingsCopyFor, zh, en } from './settings-copy.js';
 import { SettingsSection, type BetterDisplaySettingsInjected, type OpenPrefs } from './SettingsSection.js';
 import { firstSessionId, skillsFromListResult, type SkillStatusProbe } from './skill-status.js';

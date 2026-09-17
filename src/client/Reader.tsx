@@ -777,15 +777,15 @@ export function Reader(props: ReaderProps) {
       {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
       {visibleSubmissions.map(submission => (
         <div key={submission.requestId} className={css.userCluster} data-reader-pending-submission>
-          {submission.attachments.some(item => item.type === 'image') && (
+          {submission.images.length > 0 && (
             <div className={css.userImages}>
-              {submission.attachments.map((item, idx) => item.type === 'image' ? (
+              {submission.images.map((item, idx) => (
                 <figure key={idx} className={css.imageFigure}>
-                  <div className={css.imageFrame} style={{ aspectRatio: `${item.value.width || 4} / ${item.value.height || 3}` }}>
-                    <img src={item.value.previewUrl} alt={item.value.name ?? '发送的图片'} className={css.pendingImage} />
+                  <div className={css.imageFrame} style={{ aspectRatio: `${item.width || 4} / ${item.height || 3}` }}>
+                    <img src={item.previewUrl} alt={item.name ?? '发送的图片'} className={css.pendingImage} />
                   </div>
                 </figure>
-              ) : null)}
+              ))}
             </div>
           )}
           {submission.text ? (

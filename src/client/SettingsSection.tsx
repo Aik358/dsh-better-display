@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
-import { settingsCopyFor, type SettingsCopy } from './settings-copy.js';
+import { settingsCopyFor, type SettingsCopy, type SettingsCopyKey } from './settings-copy.js';
 import { detectGenerativeMcpappsSkill, shortestInstallCommand, type SkillStatusProbe, type SkillStatusSnapshot } from './skill-status.js';
 import css from './SettingsSection.module.css';
 
@@ -18,7 +18,9 @@ export interface BetterDisplaySettingsInjected {
 }
 
 type SettingsProps = BetterDisplaySettingsInjected & {
-  t?: (key: string) => string;
+  /** Official settings.section owner share; unused here. */
+  close?: () => void;
+  t?: (key: SettingsCopyKey) => string;
 };
 
 function text(props: SettingsProps, copy: SettingsCopy, key: keyof SettingsCopy): string {
