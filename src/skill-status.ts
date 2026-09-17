@@ -2,6 +2,12 @@
 
 export const GENERATIVE_MCPAPPS_SKILL = 'generative-mcpapps';
 
+/** Conventional relative roots only. Never expand $HOME or dump host `root.path`. */
+export const CONVENTIONAL_SKILL_ROOTS = ['.dsh/skills', '.agents/skills'] as const;
+
+/** Copy source relative to the plugin / checkout, not an absolute pack path. */
+export const SKILL_PACK_RELATIVE = `skills/${GENERATIVE_MCPAPPS_SKILL}`;
+
 export type SkillRootSource =
   | 'project-dsh'
   | 'project-agents'
@@ -55,4 +61,21 @@ export function skillsFromListResult(result: unknown): { name?: string }[] {
     if (Array.isArray(record.value)) return record.value as { name?: string }[];
   }
   return [];
+}
+
+export function publicSkillRoots(): readonly SkillRootInfo[] {
+  return CONVENTIONAL_SKILL_ROOTS.map(path => ({ source: 'conventional', path }));
+}
+
+/**
+ * Strip host home / pack absolutes before anything user-facing (HTTP or Settings).
+ * Detection still uses the raw scan; this is the public face.
+ */
+export function toPublicSkillStatus(status: HostSkillStatus): HostSkillStatus {
+  return {
+    name: status.name,
+    installed: status.installed,
+    via: status.via,
+    roots: publicSkillRoots(),
+  };
 }

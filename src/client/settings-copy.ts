@@ -23,10 +23,10 @@ export const en: SettingsCopy = {
   skillMissing: 'Not detected',
   skillPurpose: 'This install is for model auto-selection of MCP Apps. Reader already renders mcp-app fences when the model emits them.',
   skillPluginNote: 'Shipping the pack inside this plugin repository does not install it into the harness skill catalog.',
-  skillInstall: 'Copy the whole generative-mcpapps folder (including references and examples) into a harness skill root, then Re-check. There is no one-click install that works on every host.',
+  skillInstall: 'Copy the whole generative-mcpapps folder (including references and examples) into .dsh/skills or .agents/skills — in your home or the project, you choose — then Re-check. There is no one-click install that works on every host.',
   skillRecheck: 'Re-check',
   skillChecking: 'Checking…',
-  skillUnavailable: 'Could not query the host skill catalog. Use a skill root below, then Re-check.',
+  skillUnavailable: 'Could not query the host skill catalog. Copy into .dsh/skills or .agents/skills (home or project), then Re-check.',
 };
 
 export const zh: SettingsCopy = {
@@ -38,10 +38,10 @@ export const zh: SettingsCopy = {
   skillMissing: '未检测到',
   skillPurpose: '这项安装是为了让模型自动选用 MCP Apps。阅读页在模型写出 mcp-app 代码块时已经会渲染，不依赖该技能是否装进宿主。',
   skillPluginNote: '技能包只出现在本插件仓库里，并不等于当前 Agent 已经加载它。',
-  skillInstall: '把完整的 generative-mcpapps 文件夹（含 references 与 examples）复制到宿主支持的技能目录，然后重新检测。没有在所有宿主上都可用的一键安装。',
+  skillInstall: '把完整的 generative-mcpapps 文件夹（含 references 与 examples）复制到 .dsh/skills 或 .agents/skills（家目录或项目目录，由你选），然后重新检测。没有在所有宿主上都可用的一键安装。',
   skillRecheck: '重新检测',
   skillChecking: '正在检测…',
-  skillUnavailable: '无法查询宿主技能目录。请先复制到下列技能根目录，再重新检测。',
+  skillUnavailable: '无法查询宿主技能目录。请复制到 .dsh/skills 或 .agents/skills（家目录或项目），再重新检测。',
 };
 
 export function settingsLanguage(tag: string | undefined): 'zh' | 'en' {

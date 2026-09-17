@@ -34,6 +34,8 @@ test('commits compiled lib entries and does not require a prepare script', () =>
   assert.match(clientJs, /id:\s*"dsh-better-display"/);
   assert.match(clientJs, /settings\.section/);
   assert.match(clientJs, /deliverableOpenMode/);
+  assert.match(clientJs, /\.dsh\/skills/);
+  assert.doesNotMatch(clientJs, /submission\.images\.length/);
 });
 
 test('README leads with the official stock one-liner and names pnpm', () => {

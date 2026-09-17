@@ -1,11 +1,23 @@
 import {
+  CONVENTIONAL_SKILL_ROOTS,
   GENERATIVE_MCPAPPS_SKILL,
+  SKILL_PACK_RELATIVE,
+  publicSkillRoots,
   skillListIncludes,
   skillsFromListResult,
+  toPublicSkillStatus,
   type HostSkillStatus,
 } from '../skill-status.js';
 
-export { GENERATIVE_MCPAPPS_SKILL, skillListIncludes, skillsFromListResult };
+export {
+  CONVENTIONAL_SKILL_ROOTS,
+  GENERATIVE_MCPAPPS_SKILL,
+  SKILL_PACK_RELATIVE,
+  publicSkillRoots,
+  skillListIncludes,
+  skillsFromListResult,
+  toPublicSkillStatus,
+};
 export type { HostSkillStatus };
 
 export interface SkillStatusSnapshot {
@@ -43,21 +55,20 @@ export async function detectGenerativeMcpappsSkill(probe: SkillStatusProbe): Pro
 
   const installed = Boolean(host?.installed || remoteHit);
   const via = remoteHit ? 'skills.list' : (host?.via ?? null);
+  const publicHost = host === undefined ? undefined : toPublicSkillStatus(host);
   return {
     name: GENERATIVE_MCPAPPS_SKILL,
     installed,
     via,
-    roots: host?.roots ?? [],
-    ...host?.packPath !== undefined ? { packPath: host.packPath } : {},
+    roots: publicHost?.roots ?? publicSkillRoots(),
     hostReached: host !== undefined,
   };
 }
 
-export function shortestInstallCommand(status: Pick<SkillStatusSnapshot, 'packPath' | 'roots'>): string {
-  const userRoot = status.roots.find(root => root.source === 'user-dsh')?.path
-    ?? '$DSH_HOME/skills';
-  const source = status.packPath ?? 'skills/generative-mcpapps';
-  return `mkdir -p "${userRoot}" && cp -R "${source}" "${userRoot}/"`;
+/** mkdir/cp using conventional relative roots only. Host paths are ignored. */
+export function shortestInstallCommand(_status?: Pick<SkillStatusSnapshot, 'packPath' | 'roots'>): string {
+  const dest = CONVENTIONAL_SKILL_ROOTS[0];
+  return `mkdir -p ${dest} && cp -R ${SKILL_PACK_RELATIVE} ${dest}/`;
 }
 
 export function firstSessionId(list: { ids?: readonly string[]; byId?: Record<string, unknown> } | undefined): string | undefined {

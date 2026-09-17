@@ -12,6 +12,7 @@ import { StreamMotionContext } from './streaming.js';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
+import { asReadonlyArray, pendingSubmissionImages } from './pending-submission.js';
 import { WaitingStatus } from './WaitingStatus.js';
 import { waitingAnchor } from './waiting-clock.js';
 import { ContextInjectionRow } from './native/ContextInjectionRow.js';
@@ -471,7 +472,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
   const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold), [steps, boundary, autoFold]);
   const openMode = deliverableOpenModeOf(useSyncExternalStore(
     props.openPrefs?.subscribe ?? ((fn: () => void) => { void fn; return () => {}; }),
-    () => props.openPrefs?.getSnapshot().deliverableOpenMode,
+    () => props.openPrefs?.getSnapshot()?.deliverableOpenMode,
     () => 'external',
   ));
   const hasProcess = flow.some(item => item.kind === 'tool' || hasProcessContent(nodes.get(item.nodeKey), boundary));
@@ -584,7 +585,8 @@ export function Reader(props: ReaderProps) {
   const hasMore = props.useSession(snapshot => snapshot.hasMore);
   const loadingOlder = props.useSession(snapshot => snapshot.loadingOlder);
   const pendingSubmissions = props.useSession(snapshot => snapshot.pendingSubmissions);
-  const waitAnchor = waitingAnchor(order, key => nodes.get(key), pendingSubmissions);
+  const pendingList = asReadonlyArray<{ requestId: string; text?: string; time?: number; placement?: string }>(pendingSubmissions);
+  const waitAnchor = waitingAnchor(order, key => nodes.get(key), pendingList);
   const motionPreference = props.useStore(state => state.motion);
   const motion = useMotionAllowed(motionPreference);
   const autoFold = props.useStore(state => state.autoFold ?? true);
@@ -594,7 +596,7 @@ export function Reader(props: ReaderProps) {
     // 状态机铁律：「深度求索中」与「正在处理/思考」永远互斥。
     // 1. 仅空闲发送（!running）的本地回显窗口：用户按下回车第 0 毫秒立即反馈。
     //    忙碌时的 queued/steering 回显不算等待——模型本来就在工作。
-    if (!running && pendingSubmissions && pendingSubmissions.length > 0) return true;
+    if (!running && pendingList.length > 0) return true;
 
     const lastKey = order.at(-1);
     const lastNode = lastKey ? nodes.get(lastKey) : undefined;
@@ -629,7 +631,7 @@ export function Reader(props: ReaderProps) {
     }
 
     return false;
-  }, [running, pendingSubmissions, order, nodes, groups, timeline]);
+  }, [running, pendingList, order, nodes, groups, timeline]);
   const scroll = useReadingScroll(root, motion);
   const pinnedKeys = usePinnedSelection(root);
   const selectedProcessKeys = usePinnedSelection(root, '[data-reader-process]');
@@ -739,7 +741,7 @@ export function Reader(props: ReaderProps) {
 
   const lastKey = order.at(-1);
   const lastNode = lastKey ? nodes.get(lastKey) : undefined;
-  const lastSubmissionId = pendingSubmissions?.length ? pendingSubmissions[pendingSubmissions.length - 1].requestId : null;
+  const lastSubmissionId = pendingList.length ? pendingList[pendingList.length - 1].requestId : null;
   const lastOrderKeyRef = useRef<string | undefined>(lastKey);
   const lastSubmissionRef = useRef<string | null>(lastSubmissionId);
 
@@ -755,9 +757,9 @@ export function Reader(props: ReaderProps) {
   }, [lastKey, lastNode?.kind, lastSubmissionId, scroll]);
 
   const visibleSubmissions = useMemo(() => {
-    if (!pendingSubmissions || pendingSubmissions.length === 0) return [];
-    return pendingSubmissions.filter(sub => sub.placement !== 'queued');
-  }, [pendingSubmissions]);
+    if (pendingList.length === 0) return [];
+    return pendingList.filter(sub => sub.placement !== 'queued');
+  }, [pendingList]);
 
   // ChatView publishes data-chat-flow="" on its column. Skins treat a
   // scrollport without that hook as inspect-only and hide [data-composer-seat].
@@ -775,11 +777,13 @@ export function Reader(props: ReaderProps) {
       {openError && <div className={css.error} role="alert">会话暂时无法读取：{openError.message}</div>}
       {loading && groups.length === 0 && <p className={css.empty} role="status">正在读取会话…</p>}
       {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
-      {visibleSubmissions.map(submission => (
+      {visibleSubmissions.map(submission => {
+        const images = pendingSubmissionImages(submission);
+        return (
         <div key={submission.requestId} className={css.userCluster} data-reader-pending-submission>
-          {submission.images.length > 0 && (
+          {images.length > 0 && (
             <div className={css.userImages}>
-              {submission.images.map((item, idx) => (
+              {images.map((item, idx) => (
                 <figure key={idx} className={css.imageFigure}>
                   <div className={css.imageFrame} style={{ aspectRatio: `${item.width || 4} / ${item.height || 3}` }}>
                     <img src={item.previewUrl} alt={item.name ?? '发送的图片'} className={css.pendingImage} />
@@ -793,9 +797,10 @@ export function Reader(props: ReaderProps) {
               <div className={css.blocks}>{submission.text}</div>
             </div>
           ) : null}
-          <UserMessageActions text={submission.text} time={submission.time} />
+          <UserMessageActions text={submission.text ?? ''} time={submission.time} />
         </div>
-      ))}
+        );
+      })}
       {isAwaitingModel && <WaitingStatus anchor={waitAnchor} label={props.t ? props.t('chat.deepDiving') : '深度求索中...'} />}
       {pending !== undefined && <div className={css.attention} role="alert" data-reader-attention>
         <strong>{pending.kind === 'question' ? '需要你回答一个问题' : '需要你的确认'}</strong>

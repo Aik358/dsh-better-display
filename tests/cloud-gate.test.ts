@@ -29,4 +29,6 @@ test('cloud hard-gate files are committed and ban other models / computer use', 
   assert.match(cloud, /model: inherit/);
   assert.match(cloud, /Do not spawn the Task tool, computerUse, or browser/);
   assert.match(cloud, /Composer is the only fallback/);
+  assert.match(cloud, /Do not pass a `model` argument/);
+  assert.match(cloud, /Prefer Grok or Composer only/);
 });

@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Add a Better Display settings section: deliverables still open in the system app by default, with an optional right-Sidebar preview, plus generative-mcpapps skill-root detection and install guidance.
+- Guard pending-submission image echoes so a text-only send cannot crash `conversation.view` (`images` / `attachments` may be missing).
+- Install guidance names only conventional relative roots (`.dsh/skills`, `.agents/skills`) and never prints host home or plugin pack absolutes.
 - Keep ChatView's `data-chat-flow=""` hook on the Reader column so skins that hide `[data-composer-seat]` when the scrollport has no chat-flow (maid-atelier, phoebe-atelier, and others) still show the composer in reading view.
 
 ## 0.1.1 — 2026-09-16

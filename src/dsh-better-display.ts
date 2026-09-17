@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '@deepseek-ai/cordis';
 import { scanGenerativeMcpappsStatus } from './skill-roots.js';
-import { skillsFromListResult } from './skill-status.js';
+import { skillsFromListResult, toPublicSkillStatus } from './skill-status.js';
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -93,7 +93,7 @@ export function apply(ctx: Context): void {
               cwd,
               listSkills: skillLister(ctx),
             });
-            writeJson(res, 200, status);
+            writeJson(res, 200, toPublicSkillStatus(status));
           } catch (err) {
             writeJson(res, 500, { ok: false, error: String(err) });
           }

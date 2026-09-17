@@ -4,11 +4,14 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  CONVENTIONAL_SKILL_ROOTS,
   GENERATIVE_MCPAPPS_SKILL,
+  SKILL_PACK_RELATIVE,
   skillListIncludes,
   skillNameMatches,
   skillRootEntryMatches,
   skillsFromListResult,
+  toPublicSkillStatus,
 } from '../src/skill-status.ts';
 import {
   projectSkillRoots,
@@ -67,6 +70,21 @@ test('a real user skill root with the pack is installed; the plugin pack path is
   assert.equal(found.packPath, '/plugin/dsh-better-display/skills/generative-mcpapps');
 });
 
+test('client detect snapshot never carries host packPath or home roots', async () => {
+  const status = await detectGenerativeMcpappsSkill({
+    fetchHostStatus: async () => ({
+      name: 'generative-mcpapps',
+      installed: false,
+      via: null,
+      packPath: '/Users/cola/plugin/skills/generative-mcpapps',
+      roots: [{ source: 'user-dsh', path: '/Users/cola/.dsh/skills', present: false }],
+    }),
+  });
+  assert.equal(status.packPath, undefined);
+  assert.deepEqual(status.roots.map(root => root.path), [...CONVENTIONAL_SKILL_ROOTS]);
+  assert.equal(status.roots.some(root => /\/Users\/|[A-Za-z]:\\/.test(root.path)), false);
+});
+
 test('skills/list wins when the registry can see the skill', async () => {
   const status = await detectGenerativeMcpappsSkill({
     fetchHostStatus: async () => ({
@@ -81,13 +99,35 @@ test('skills/list wins when the registry can see the skill', async () => {
   assert.equal(status.via, 'skills.list');
 });
 
-test('install command copies into a user skill root', () => {
+test('public skill status strips packPath and host home absolutes', () => {
+  const published = toPublicSkillStatus({
+    name: 'generative-mcpapps',
+    installed: false,
+    via: null,
+    packPath: '/Users/cola/.dsh/plugins/skills/generative-mcpapps',
+    roots: [
+      { source: 'user-dsh', path: '/Users/cola/.dsh/skills', present: false },
+      { source: 'user-agents', path: 'C:\\Users\\cola\\.agents\\skills', present: false },
+    ],
+  });
+  assert.equal(published.packPath, undefined);
+  assert.deepEqual(published.roots.map(root => root.path), [...CONVENTIONAL_SKILL_ROOTS]);
+  assert.equal(published.roots.some(root => /\/Users\/|[A-Za-z]:\\/.test(root.path)), false);
+});
+
+test('install command uses conventional relative roots only', () => {
   const command = shortestInstallCommand({
     packPath: '/opt/plugin/skills/generative-mcpapps',
     roots: [{ source: 'user-dsh', path: '/home/me/.dsh/skills' }],
   });
-  assert.match(command, /mkdir -p "\/home\/me\/\.dsh\/skills"/);
-  assert.match(command, /cp -R "\/opt\/plugin\/skills\/generative-mcpapps"/);
+  assert.match(command, /mkdir -p \.dsh\/skills/);
+  assert.match(command, new RegExp(`cp -R ${SKILL_PACK_RELATIVE.replace('/', '\\/')}`));
+  assert.match(command, /generative-mcpapps/);
+  assert.doesNotMatch(command, /\/Users\//);
+  assert.doesNotMatch(command, /[A-Za-z]:\\/);
+  assert.doesNotMatch(command, /\/home\//);
+  assert.doesNotMatch(command, /\$HOME|\$DSH_HOME/);
+  assert.doesNotMatch(command, /\/opt\//);
 });
 
 test('firstSessionId reads ids or byId keys', () => {

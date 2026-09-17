@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
 import { settingsCopyFor, type SettingsCopy, type SettingsCopyKey } from './settings-copy.js';
-import { detectGenerativeMcpappsSkill, shortestInstallCommand, type SkillStatusProbe, type SkillStatusSnapshot } from './skill-status.js';
+import { CONVENTIONAL_SKILL_ROOTS, detectGenerativeMcpappsSkill, shortestInstallCommand, type SkillStatusProbe, type SkillStatusSnapshot } from './skill-status.js';
 import css from './SettingsSection.module.css';
 
 export interface OpenPrefs {
@@ -39,7 +39,7 @@ export function SettingsSection(props: SettingsProps) {
   const copy = props.copy ?? settingsCopyFor(props.languageTag);
   const mode = deliverableOpenModeOf(useSyncExternalStore(
     props.prefs.subscribe,
-    () => props.prefs.getSnapshot().deliverableOpenMode,
+    () => props.prefs.getSnapshot()?.deliverableOpenMode,
     () => 'external',
   ));
   const setMode = (value: DeliverableOpenMode) => {
@@ -98,14 +98,12 @@ export function SettingsSection(props: SettingsProps) {
         {skill && !skill.installed ? (
           <>
             <p className={css.desc}>{skill.hostReached ? text(props, copy, 'skillInstall') : text(props, copy, 'skillUnavailable')}</p>
-            <pre className={css.pre}>{shortestInstallCommand(skill)}</pre>
-            {skill.roots.length > 0 && (
-              <ul className={css.roots}>
-                {skill.roots.map(root => (
-                  <li key={`${root.source}:${root.path}`}>{root.source}: {root.path}</li>
-                ))}
-              </ul>
-            )}
+            <pre className={css.pre}>{shortestInstallCommand()}</pre>
+            <ul className={css.roots} data-better-display-skill-roots>
+              {CONVENTIONAL_SKILL_ROOTS.map(root => (
+                <li key={root}>{root}</li>
+              ))}
+            </ul>
           </>
         ) : null}
         <div className={css.actions}>
