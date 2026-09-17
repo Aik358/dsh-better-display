@@ -7,6 +7,7 @@ import { collapseRows, containsNewUser, flowRows, FOLD_TIMING, retiringKeys } fr
 import type { FoldPhase } from './fold-choreography.js';
 import { Disclosure } from './motion.js';
 import { FoldSummaryText } from './LiveFold.js';
+import { DiffStat } from './DiffPanel.js';
 import { StreamMotionContext } from './streaming.js';
 import css from './Reader.module.css';
 
@@ -30,8 +31,11 @@ function Summary({ item, open, onChange, motion }: {
 }) {
   const button = useRef<HTMLButtonElement>(null);
   return <div data-reader-live-fold data-expanded={open} data-reader-live-fold-summary={item.summary}>
-    <Disclosure open={open} onChange={onChange} buttonRef={button} ariaLabel="此前步骤"
-      label={<FoldSummaryText summary={item.summary} motion={motion} />} />
+    <div className={css.summaryRow}>
+      <Disclosure open={open} onChange={onChange} buttonRef={button} ariaLabel="此前步骤"
+        label={<FoldSummaryText summary={item.summary} motion={motion} />} />
+      <DiffStat steps={item.steps} label={item.summary} />
+    </div>
   </div>;
 }
 
@@ -57,9 +61,18 @@ function FlowCell({ hidden, instant, motion, rowKey, children, summary = false }
     el.dispatchEvent(new CustomEvent('reader-layout-start', { bubbles: true }));
     let released = false;
     const release = () => { if (!released) { released = true; el.dispatchEvent(new CustomEvent('reader-layout-end', { bubbles: true })); } };
-    animation.onfinish = () => { setPresent(!hidden); animation.cancel(); release(); };
+    // Do NOT cancel here. `fill: 'both'` is what currently holds the cell at its
+    // collapsed size; cancelling on finish drops that fill before React has
+    // committed the removal, so the cell snaps back to full height for one frame
+    // — the flash before it disappears. The state change alone retires it; the
+    // cleanup below cancels the animation once that has actually rendered.
+    animation.onfinish = () => { setPresent(!hidden); release(); };
     return () => { animation.cancel(); release(); };
-  }, [hidden, instant, motion]);
+    // `present` is a dependency so that committing it re-runs this effect: the
+    // cleanup then cancels the finished animation *after* the removal has been
+    // applied, which is the only moment the fill can be dropped safely. Without
+    // it the animation was never cancelled at all and every folded cell kept one.
+  }, [hidden, instant, motion, present]);
   return <div ref={ref} className={css.flowCell} data-flow-key={rowKey} data-flow-summary={summary || undefined}
     hidden={hidden && !present} aria-hidden={hidden || undefined} {...(hidden ? { inert: '' } : {})}>
     {present && <div className={css.flowCellInner}>{children}</div>}

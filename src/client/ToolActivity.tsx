@@ -5,7 +5,7 @@ import { DiffBlock, DisclosureRow, JsonTree, ReadBlock, SearchBlock, TerminalBlo
   IconApiOutline14, IconBrowseOutline16, IconEditOutline16, IconSearchOutline16, IconSkillOutline16, IconSparkle16 } from '@deepseek-ai/dsh-client-ui-primitives';
 import { Blocks, contentBlocks } from './Blocks.js';
 import { ProcessFragment } from './motion.js';
-import { activityPhase, activitySummary, executionFacts, objectValue, toolIdentity } from './tool-activity.js';
+import { activityPhase, activitySummary, callDiffHunks, diffTotals, executionFacts, objectValue, toolIdentity } from './tool-activity.js';
 import type { ToolActivityEntry, ToolCategory, ToolPhase } from './tool-activity.js';
 import type { BlockRenderProps } from './types.js';
 import { classifyTool, toolRowModel, VARIANT_TITLES } from './native/tool-call-model.js';
@@ -48,6 +48,9 @@ function readLines(value: unknown): ReadBlockLine[] | null {
   }
   return lines;
 }
+
+/** A step past this reads as slow rather than merely in progress. */
+const SLOW_TOOL_MS = 10_000;
 
 function diffHunks(value: unknown): DiffHunk[] | null {
   if (!Array.isArray(value) || value.length === 0) return null;
@@ -97,8 +100,11 @@ function ResultView({ entry, model, phase, ...render }: BlockRenderProps & { ent
   }
   const lines = readLines(meta?.lines);
   if (model.category === 'read' && typeof meta?.path === 'string' && typeof meta.totalLines === 'number' && lines) return <div data-reader-tool-file><ReadBlock label={meta.path} lang={typeof meta.lang === 'string' ? meta.lang : undefined} lines={lines} totalLines={meta.totalLines} maxLines={18} labels={readBlockLabels} /></div>;
-  const diffs = diffHunks(meta?.diffs);
-  if (model.category === 'write' && diffs) return <div data-reader-tool-diff><DiffBlock diffs={diffs} maxLines={18} labels={diffBlockLabels} /></div>;
+  // The host's own hunks when it sent them; otherwise derive them from the call's
+  // arguments, which is also what the official row does while a write is pending.
+  // Both the counts and this card read the same source, so they cannot disagree.
+  const diffs = diffHunks(meta?.diffs) ?? callDiffHunks(block, model.args, model.name);
+  if (diffs.length) return <div data-reader-tool-diff><DiffBlock diffs={diffs} maxLines={18} labels={diffBlockLabels} /></div>;
   if (model.category === 'search' && typeof meta?.total === 'number' && typeof meta.truncated === 'boolean') {
     if (meta.shape === 'paths' && Array.isArray(meta.paths) && meta.paths.every((path): path is string => typeof path === 'string')) return <div data-reader-tool-search><SearchBlock kind="paths" paths={meta.paths} total={meta.total} truncated={meta.truncated} maxLines={18} labels={searchBlockLabels} /></div>;
     const files = searchFiles(meta.files);
@@ -158,8 +164,31 @@ export const ToolActivity = memo(function ToolActivityView({ entry, motion, turn
   const rowTitle = model.name === 'skill' ? 'Skill' : native?.title ?? VARIANT_TITLES[classifyTool(model.name)];
   const rowSummary = phase === 'interrupted' ? '已停止 · 调用记录保留' : model.name === 'skill' ? skillName : native?.errorSummary ?? native?.summary
     ?? (classifyTool(model.name) === 'others' ? `${model.name} · ${model.target ?? model.title}` : model.target ?? model.title);
+  // Files that changed get the same +/- line counts the official tool row shows,
+  // read straight from the diff the host attached to the result.
+  const diff = useMemo(() => diffTotals(block, model.args, model.name), [block, model.args, model.name]);
+  // The changed lines ride in the row's own expansion, the way the official tool
+  // row shows them — one disclosure, not a second floating widget.
   const showState = phase === 'preparing' || phase === 'running' || phase === 'failed' || phase === 'interrupted';
+  const running = phase === 'preparing' || phase === 'running';
+  // A step that has not returned yet counts its own seconds, so a long command
+  // reads as progress rather than as a stall. The clock is idle-rendered off the
+  // row's own call time, and disappears the moment the result arrives.
+  const [liveMs, setLiveMs] = useState<number | null>(null);
+  const openedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (!running) { openedAt.current = null; setLiveMs(null); return; }
+    const stamped = block && 'kind' in block && block.callTime != null ? block.callTime : null;
+    const base = stamped ?? (openedAt.current ??= Date.now());
+    const tick = () => setLiveMs(Math.max(0, Date.now() - base));
+    tick();
+    const timer = setInterval(tick, 200);
+    return () => clearInterval(timer);
+  }, [running, block]);
   const elapsed = block && 'kind' in block && block.callTime != null ? Math.max(0, block.time - block.callTime) : null;
+  // A step that ran long keeps showing how long it took after it returns: the
+  // number is the point of the readout. A fast step shows nothing once it is done.
+  const shownMs = liveMs ?? (elapsed !== null && elapsed >= SLOW_TOOL_MS ? elapsed : null);
   const rawResult = useMemo(() => {
     const value = preview.entry.block;
     return value && 'kind' in value ? JSON.stringify({ content: value.content, isError: value.isError, meta: value.meta }, null, 2) : '';
@@ -170,7 +199,15 @@ export const ToolActivity = memo(function ToolActivityView({ entry, motion, turn
   return <div ref={element => { control.current = element?.querySelector<HTMLElement>('[data-disclosure-row]') ?? null; }} className={css.toolActivity} data-reader-tool-call={entry.callId} data-tool-phase={phase} data-tool-args-length={model.raw.length} data-tool-category={model.category} data-expanded={open} data-ud-check="reader-tool-activity">
     <DisclosureRow icon={<Icon size={14} />} title={rowTitle} open={open} expandable expandOnRowClick keepContentWhenOpen
       onToggle={() => { onRead(); setOpen(value => !value); }} rowClassName={css.nativeToolRow}
-      collapsedContent={<><span className={css.rowSeparator} aria-hidden /><span className={css.nativeToolSummary} title={rowSummary} data-reader-tool-summary>{rowSummary}</span>
+      collapsedContent={<><span className={css.rowSeparator} aria-hidden /><span className={css.nativeToolSummary} title={rowSummary} data-reader-tool-summary
+        {...(running ? { 'data-running': '' } : {})}>{rowSummary}</span>
+        {shownMs !== null && <span className={css.toolElapsed} data-reader-tool-elapsed
+          {...(shownMs >= SLOW_TOOL_MS ? { 'data-slow': '' } : {})}>
+          {(shownMs / 1000).toFixed(shownMs < 10000 ? 1 : 0)}s</span>}
+        {diff && <span className={css.diffStat} data-reader-diff-stat>
+          {diff.added > 0 && <span className={css.diffAdded}>+{number.format(diff.added)}</span>}
+          {diff.removed > 0 && <span className={css.diffRemoved}>-{number.format(diff.removed)}</span>}
+        </span>}
         {showState && <span className={css.toolState} data-phase={phase}>{LABEL[phase]}</span>}</>} />
     <ProcessFragment open={open} motion={motion} onRead={onRead} returnFocusTo={control} nodeKey={`${entry.key}:detail`} framed>
       <div id={detailId} className={css.toolDetails}>

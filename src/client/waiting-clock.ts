@@ -3,16 +3,31 @@ type InputNode = { kind: string; data: unknown };
 type Submission = { requestId: string; time: number; placement?: string };
 const timestamp = (value: number | undefined): number | null => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 
-/** Waiting is scoped to the latest human input, never the enclosing turn. */
+/**
+ * Node kinds that hand the turn back to the model: the user speaks, a tool
+ * returns, context is injected, a command runs. The model is on the hook from
+ * one of these, and can stall there; while a tool is running it is not.
+ */
+export const WAIT_AFTER = new Set(['tool-return', 'command-input', 'context', 'model-retry', 'command']);
+
+/**
+ * The moment the current wait began.
+ *
+ * This is the time of the **last** node that handed control to the model — a
+ * returned tool, an injected context, or the user's own message. Anchoring on the
+ * user's message alone made the readout count the entire turn, so a wait that had
+ * only just begun showed the minutes the tools had already spent.
+ */
 export function waitingAnchor(order: readonly string[], get: (key: string) => InputNode | undefined, pending: readonly Submission[] = []): WaitingAnchor {
   let anchor: WaitingAnchor = { key: 'unresolved', time: null };
   for (let i = order.length - 1; i >= 0; i--) {
     const node = get(order[i]);
-    if (node?.kind === 'user' || node?.kind === 'steering') {
-      const time = node.data && typeof node.data === 'object' && 'time' in node.data && typeof node.data.time === 'number' ? node.data.time : undefined;
-      anchor = { key: order[i], time: timestamp(time) };
-      break;
-    }
+    if (!node) continue;
+    const handsOver = node.kind === 'user' || node.kind === 'steering' || WAIT_AFTER.has(node.kind);
+    if (!handsOver) continue;
+    const time = node.data && typeof node.data === 'object' && 'time' in node.data && typeof node.data.time === 'number' ? node.data.time : undefined;
+    anchor = { key: order[i], time: timestamp(time) };
+    break;
   }
   for (let i = pending.length - 1; i >= 0; i--) {
     const input = pending[i];

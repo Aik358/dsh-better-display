@@ -151,7 +151,19 @@ function toolSummary(entry: ToolActivityEntry): string {
       const query = clip(info.target, 30);
       return (info.name === 'web_search' ? '搜索网页' : '读取网页') + (query ? ' ' + query : '');
     }
-    default: return clip(info.title ?? info.name, 32) ?? '工具调用';
+    default: {
+      // Schema-less tools (run_code and friends) describe themselves in an
+      // argument rather than a known field: prefer the model's own
+      // description, then the first meaningful line of the code it ran.
+      if (said) return said;
+      const code = stringValue(info.args, 'code', 'source', 'script');
+      if (code) {
+        const line = code.split('\n').map(part => part.trim())
+          .find(part => part && !/^[)\]}]/.test(part) && !/^(\/\/|\*|\/\*|#)/.test(part));
+        if (line) return clip(line.replace(/\s+/gu, ' '), 44) ?? '运行代码';
+      }
+      return clip(info.title ?? info.name, 32) ?? '工具调用';
+    }
   }
 }
 

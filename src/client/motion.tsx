@@ -201,7 +201,10 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
 } {
   const port = useRef<HTMLElement | null>(null);
   const following = useRef(true);
-  const anchor = useRef<{ element: HTMLElement; top: number } | null>(null);
+  // Tracked separately from `following`: only an explicit reader action clears
+  // this, so a fold-induced scroll clamp cannot permanently drop the tail.
+  const pinned = useRef(true);
+  const anchor = useRef<{ element: HTMLElement; docTop: number } | null>(null);
   const cancelFollow = useRef<() => void>(() => {});
   const [detached, setDetached] = useState(false);
   useLayoutEffect(() => {
@@ -256,7 +259,13 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
         const element = candidates[index];
         if (element.getBoundingClientRect().bottom > top + 8) { candidate = element; break; }
       }
-      anchor.current = candidate ? { element: candidate, top: candidate.getBoundingClientRect().top } : null;
+      // Record the anchor in DOCUMENT space, never viewport space. The viewport
+      // offset also changes whenever the reader scrolls, so comparing it back
+      // turned a plain scroll into an "anchor correction" that yanked the
+      // viewport back to wherever the anchor had last been captured.
+      anchor.current = candidate
+        ? { element: candidate, docTop: candidate.getBoundingClientRect().top + scroll.scrollTop }
+        : null;
     };
     // Anchor capture is only consumed while detached; coalesce DOM scans to one per frame.
     let captureFrame = 0;
@@ -265,6 +274,12 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       captureFrame = requestAnimationFrame(() => { captureFrame = 0; capture(); });
     };
     const atBottom = () => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 25;
+    // Intent to stay pinned to the bottom, tracked independently of the scroll
+    // position. A fold collapse shrinks the transcript and the browser clamps
+    // scrollTop, producing a scroll event indistinguishable from the reader
+    // scrolling up; without this the reader silently detached exactly when the
+    // turn's last content arrived, and the page stopped following.
+    pinned.current = true;
     const onScroll = () => {
       // While a follow animation is actively driving scroll, do not cancel following midway.
       if (followFrame !== 0 || layoutDepth > 0) return;
@@ -278,12 +293,12 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       // Content growth and our own easing also change scrollTop; only a real
       // upward move by the reader detaches the tail.
       if (lastWrittenTop !== null && scroll.scrollTop < lastWrittenTop - 1) {
-        following.current = false; setDetached(true); cancelAnimationFrame(followFrame); followFrame = 0; scheduleCapture();
+        following.current = false; setDetached(true); pinned.current = false; cancelAnimationFrame(followFrame); followFrame = 0; scheduleCapture();
       }
     };
     const onWheel = (event: WheelEvent) => {
       cancelAnimationFrame(followFrame); followFrame = 0; lastWrittenTop = null;
-      if (event.deltaY < 0) { following.current = false; setDetached(true); scheduleCapture(); }
+      if (event.deltaY < 0) { following.current = false; setDetached(true); pinned.current = false; scheduleCapture(); }
     };
     const onTouch = () => {
       cancelAnimationFrame(followFrame); followFrame = 0; lastWrittenTop = null;
@@ -292,7 +307,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       if (event.target instanceof HTMLElement && event.target.closest('textarea,input,[contenteditable=true]')) return;
       if (['PageUp', 'Home', 'ArrowUp'].includes(event.key)) {
         cancelAnimationFrame(followFrame); followFrame = 0; lastWrittenTop = null;
-        following.current = false; setDetached(true); scheduleCapture();
+        following.current = false; setDetached(true); pinned.current = false; scheduleCapture();
       }
     };
     const writeTop = (top: number) => { scroll.scrollTop = top; lastWrittenTop = scroll.scrollTop; };
@@ -311,14 +326,25 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
       if (following.current && !selected()) writeTop(scroll.scrollHeight);
       capture();
     });
+    let lastHeight = content.scrollHeight;
     const observer = new ResizeObserver(() => {
       if (selected()) return;
+      const height = scroll.scrollHeight;
+      const grew = height > lastHeight + 1;
+      lastHeight = height;
+      // Growth while the reader intends to be at the bottom re-attaches the
+      // tail. This is the self-healing path for the clamp case above and is
+      // also what keeps the viewport moving when a turn ends.
+      if (grew && pinned.current && !editingText()) { following.current = true; setDetached(false); }
       if (following.current && !editingText()) {
         // Height is already animated: no second, lagging scroll easing.
         if (!motion || layoutDepth > 0) writeTop(scroll.scrollHeight);
         else if (!followFrame) { lastFrameAt = performance.now(); followFrame = requestAnimationFrame(follow); }
       } else if (!following.current && anchor.current?.element.isConnected) {
-        const delta = anchor.current.element.getBoundingClientRect().top - anchor.current.top;
+        // Only a real layout change above the anchor needs compensation. A reader
+        // scroll moves the viewport offset but not the document offset, so this
+        // stays silent while the reader is scrolling and cannot snap back.
+        const delta = anchor.current.element.getBoundingClientRect().top + scroll.scrollTop - anchor.current.docTop;
         if (Math.abs(delta) > .5) writeTop(scroll.scrollTop + delta);
       }
       capture();
@@ -346,6 +372,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
     cancelFollow.current();
     anchor.current = null;
     following.current = true;
+    pinned.current = true;
     setDetached(false);
     if (port.current) {
       port.current.scrollTop = port.current.scrollHeight;
@@ -354,6 +381,7 @@ export function useReadingScroll(root: RefObject<HTMLElement>, motion: boolean):
   const release = useCallback(() => {
     cancelFollow.current();
     following.current = false;
+    pinned.current = false;
     anchor.current = null;
     setDetached(true);
   }, []);

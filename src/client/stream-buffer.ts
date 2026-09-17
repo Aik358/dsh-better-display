@@ -1,5 +1,21 @@
 /** Presentation only. The original session string remains the source of truth. */
-export const STREAM_TIMING = { catchUpMs: 180, maxQueuedMs: 240, finishMs: 96, revealMs: 350, minimumRate: 100 } as const;
+// The reveal runs at the rate the source is actually producing (feed-forward)
+// plus a proportional term that closes whatever backlog jitter left behind.
+// A proportional-only controller drains exactly one window per window, so the
+// display trails live output by catchUpMs forever — unreadable-but-smooth at
+// 75 chars/s, permanently behind at 1000. The feed-forward term is what makes
+// the pace adapt to the model instead of to a fixed constant.
+export const STREAM_TIMING = {
+  catchUpMs: 520,
+  maxQueuedMs: 600,
+  finishMs: 96,
+  revealMs: 350,
+  minimumRate: 260,
+  /** Weight of the newest arrival sample in the smoothed source rate. */
+  rateWeight: 0.35,
+  /** A longer gap is a pause between runs, not a slow model: keep the estimate. */
+  rateGapMs: 250,
+} as const;
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 function atOrAfter(values: readonly number[], target: number): number {
@@ -22,6 +38,8 @@ export class StreamBuffer {
   private lastAt: number | null = null;
   private credit = 0;
   private finishAt: number | null = null;
+  private rateEwma = 0;
+  private lastArrival: number | null = null;
 
   constructor(initial = '') {
     this.target = initial;
@@ -50,7 +68,9 @@ export class StreamBuffer {
     }
     if (text !== this.target) {
       const wasPending = this.pending;
+      const grew = text.length - this.target.length;
       const from = this.boundaries.at(-2) ?? 0;
+      this.observe(grew, now);
       this.target = text;
       // Re-segment the previous last cluster: an emoji/combining sequence can
       // itself span transport chunks. Frozen source prefixes are not scanned.
@@ -63,11 +83,25 @@ export class StreamBuffer {
     if (this.target.length - this.visible.length > 8192) { this.revision++; this.flush(); }
   }
 
+  /** Smoothed source rate, so one jittery transport chunk cannot set the pace. */
+  private observe(grew: number, now: number): void {
+    const previous = this.lastArrival;
+    this.lastArrival = now;
+    if (previous === null || grew <= 0) return;
+    const elapsed = now - previous;
+    if (elapsed <= 0 || elapsed > STREAM_TIMING.rateGapMs) return;
+    const sample = grew * 1000 / elapsed;
+    this.rateEwma = this.rateEwma === 0
+      ? sample
+      : this.rateEwma * (1 - STREAM_TIMING.rateWeight) + sample * STREAM_TIMING.rateWeight;
+  }
+
   flush(): void {
     this.visible = this.target;
     this.arrivals = [];
     this.credit = 0;
     this.lastAt = null;
+    this.lastArrival = null;
     this.finishAt = null;
   }
 
@@ -79,7 +113,9 @@ export class StreamBuffer {
     const delta = Math.max(0, now - (this.lastAt ?? now));
     this.lastAt = now;
     const windowMs = this.finishAt === null ? STREAM_TIMING.catchUpMs : Math.max(16, Math.min(STREAM_TIMING.catchUpMs, this.finishAt - now));
-    const rate = Math.max(STREAM_TIMING.minimumRate, remaining * 1000 / windowMs);
+    // Feed-forward keeps pace with the source; the proportional term then drains
+    // whatever backlog is left, so lag decays instead of settling at one window.
+    const rate = Math.max(STREAM_TIMING.minimumRate, this.rateEwma + remaining * 1000 / windowMs);
     this.credit += rate * delta / 1000;
     const count = Math.floor(this.credit);
     this.credit -= count;

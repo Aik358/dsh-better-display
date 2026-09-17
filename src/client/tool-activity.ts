@@ -99,6 +99,12 @@ export function toolIdentity(entry: Pick<ToolActivityEntry, 'block' | 'draft'>) 
   };
 }
 
+/** Name and raw arguments of any call block, whether it has landed or is pending. */
+function childIdentity(block: ToolCallBlock): { name?: string; raw: string } {
+  if (!block || !('kind' in block)) return { name: block?.name, raw: block?.argsRaw ?? '' };
+  return { name: block.call?.name, raw: block.call?.argsRaw ?? '' };
+}
+
 export function executionFacts(block: ToolCallBlock | undefined): { exitCode?: number; signal?: string } {
   if (!block || !('kind' in block)) return {};
   const meta = objectValue(block.meta);
@@ -111,6 +117,138 @@ export function executionFacts(block: ToolCallBlock | undefined): { exitCode?: n
     exitCode: typeof code === 'number' && Number.isFinite(code) ? code : parsedCode,
     signal: stringValue(meta, 'signal') ?? signal?.[1],
   };
+}
+
+/** Line counts of one text side; a trailing newline does not start a line. */
+function lineCount(text: string | null): number {
+  if (text === null) return 0;
+  const body = text.endsWith('\n') ? text.slice(0, -1) : text;
+  return body === '' ? 0 : body.split('\n').length;
+}
+
+/** Argument fields that carry the text a call is about to write. */
+const NEW_TEXT_FIELDS = ['content', 'new_string', 'new_str', 'newText', 'file_text'] as const;
+/** Argument fields that carry the text a call is about to replace. */
+const OLD_TEXT_FIELDS = ['old_string', 'old_str', 'oldText'] as const;
+
+/**
+ * Added/removed line counts for a mutation call, or null when there is no diff
+ * to show.
+ *
+ * The result metadata is preferred when the host attaches one. Not every host
+ * build does — a session log may carry no hunk payload at all — so the call's own
+ * arguments are read as the fallback, which is also what the official row uses
+ * while a write is still pending. A call whose arguments hold none of these
+ * fields (a read, a listing) yields null and shows no badge.
+ */
+/**
+ * One changed file, in the exact shape the official `DiffBlock` primitive takes:
+ * `oldText` is null for a pure insertion, and `newText` is always a string. Line
+ * counts are derived from these two sides, never stored alongside them.
+ */
+export interface DiffHunk {
+  path: string;
+  oldText: string | null;
+  newText: string;
+}
+
+/** Argument fields that name the file a mutation call targets. */
+const PATH_FIELDS = ['file_path', 'path', 'filePath'] as const;
+
+function firstString(source: Record<string, unknown> | undefined, fields: readonly string[]): string | null {
+  if (!source) return null;
+  for (const field of fields) {
+    const value = source[field];
+    if (typeof value === 'string' && value !== '') return value;
+  }
+  return null;
+}
+
+/**
+ * The changed files of a mutation call.
+ *
+ * Result metadata is preferred when the host attaches it. Not every host build
+ * does, so the call's own arguments are the fallback — the same source the
+ * official row reads while a write is still pending. A call whose arguments hold
+ * none of these fields (a read, a listing) yields nothing and shows no counts.
+ */
+/** Only these tools change a file, so only these may fall back to their arguments. */
+const MUTATION_TOOLS = new Set(['write', 'edit', 'str_replace_editor']);
+
+export function callDiffHunks(
+  block: ToolCallBlock | undefined,
+  args?: Record<string, unknown>,
+  name?: string,
+): DiffHunk[] {
+  // A parent call owns whatever its children changed: a script that writes files
+  // reports those writes itself rather than through its own arguments, and the
+  // digest must see them too. Without this the counts only ever appeared on the
+  // nested row, which is what a reader noticed as a missing badge.
+  // Each child contributes through its own arguments, not the parent's: a nested
+  // write/edit records its hunks in `argsRaw`, and passing nothing here silently
+  // dropped them from the parent total. Errors are contained so one unreadable
+  // child cannot blank the whole row.
+  const nested = block && 'kind' in block && Array.isArray(block.subCalls)
+    ? block.subCalls.flatMap(child => {
+      try { return callDiffHunks(child, inputFields(childIdentity(child).raw), childIdentity(child).name); }
+      catch { return []; }
+    })
+    : [];
+  if (block && 'kind' in block) {
+    const diffs = objectValue(block.meta)?.diffs;
+    if (Array.isArray(diffs) && diffs.length > 0) {
+      const hunks: DiffHunk[] = [];
+      for (const raw of diffs) {
+        const entry = objectValue(raw);
+        if (!entry) continue;
+        const oldText = typeof entry.oldText === 'string' ? entry.oldText : null;
+        const newText = typeof entry.newText === 'string' ? entry.newText : '';
+        if (!lineCount(newText) && !lineCount(oldText)) continue;
+        hunks.push({ path: firstString(entry, PATH_FIELDS) ?? '', oldText, newText });
+      }
+      if (hunks.length) return [...hunks, ...nested];
+    }
+  }
+  // Several unrelated tools take a field named `content` (a memory note, a typed
+  // message). Reading it as a file body invented counts for calls that changed no
+  // file at all, so the name decides whether arguments may be read this way.
+  if (!name || !MUTATION_TOOLS.has(name)) return nested;
+  const path = firstString(args, PATH_FIELDS);
+  if (!path) return nested;
+  const oldText = firstString(args, OLD_TEXT_FIELDS);
+  const newText = firstString(args, NEW_TEXT_FIELDS) ?? '';
+  if (!lineCount(newText) && !lineCount(oldText)) return nested;
+  return [{ path, oldText, newText }, ...nested];
+}
+
+/** Added/removed line counts for one call, or null when there is nothing to show. */
+export function diffTotals(
+  block: ToolCallBlock | undefined,
+  args?: Record<string, unknown>,
+  name?: string,
+): { added: number; removed: number } | null {
+  const hunks = callDiffHunks(block, args, name);
+  if (!hunks.length) return null;
+  return diffLineTotals(hunks);
+}
+
+/** Counts the lines on each side, under the same rule the official block uses. */
+export function diffLineTotals(hunks: readonly DiffHunk[]): { added: number; removed: number } {
+  return hunks.reduce((total, hunk) => ({
+    added: total.added + lineCount(hunk.newText),
+    removed: total.removed + lineCount(hunk.oldText),
+  }), { added: 0, removed: 0 });
+}
+
+/** Every changed file across a folded run of steps, in the order they ran. */
+export function foldDiffHunks(steps: readonly { kind: string; entry?: ToolActivityEntry }[]): DiffHunk[] {
+  const hunks: DiffHunk[] = [];
+  for (const step of steps) {
+    if (step.kind !== 'tool' || !step.entry) continue;
+    const model = activitySummary(step.entry);
+    hunks.push(...callDiffHunks(step.entry.block, model.args, model.name));
+  }
+  return hunks;
 }
 
 export function activityPhase(entry: Pick<ToolActivityEntry, 'block' | 'draft'>, turnClosed = false): ToolPhase {

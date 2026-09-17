@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-session-controller/client';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path';
+import { fileResourceAddress } from './resource-address.js';
 import { dirname } from './deliverables.js';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
@@ -23,6 +24,25 @@ export type { ReaderBlockOwner } from './types.js';
 export { McpAppFrame } from './McpAppFrame.js';
 export const name = 'dsh-better-display-client';
 export const inject = ['slots', 'sessions', 'conversation', 'remote', 'remote.session'];
+
+/** Open a path (or reveal it) with the desktop's own file handling. */
+async function openOnDesktop(ctx: Context, targetPath: string, action?: 'reveal'): Promise<void> {
+  const remote = ctx.remote as unknown as { session?: SessionOpenFace } | undefined;
+  const face = remote?.session
+    ?? (ctx.get?.('remote.session') as unknown as SessionOpenFace | undefined)
+    ?? ((ctx.get?.('remote') as unknown as { session?: SessionOpenFace } | undefined)?.session);
+  if (!face?.openWorkspacePath) {
+    console.warn('[dsh-better-display] no desktop opener is available for', targetPath);
+    return;
+  }
+  // The RPC answers { opened: true }; a missing field is not a failure.
+  const result = await face.openWorkspacePath(action ? { path: targetPath, action } : { path: targetPath });
+  if (result && result.opened === false) console.warn('[dsh-better-display] desktop open refused:', targetPath);
+}
+
+interface SessionOpenFace {
+  openWorkspacePath: (arg: { path: string; action?: 'reveal' }) => Promise<{ opened?: boolean } | undefined>;
+}
 
 export function apply(ctx: Context): void {
   const store = createReaderStore();
@@ -54,18 +74,18 @@ export function apply(ctx: Context): void {
             const targetPath = path === '.' || path === ''
               ? (cwd ?? '.')
               : resolveWorkspacePath(cwd, path);
-            const remote = ctx.remote as unknown as { session?: { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } } | undefined;
-            const remoteSession = remote?.session
-              ?? (ctx.get?.('remote.session') as unknown as { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } | undefined)
-              ?? ((ctx.get?.('remote') as unknown as { session?: { openWorkspacePath: (arg: { path: string }) => Promise<{ ok: boolean; error?: { message: string } }> } })?.session);
-            if (remoteSession?.openWorkspacePath) {
-              const result = await remoteSession.openWorkspacePath({ path: targetPath });
-              if (!result?.ok) {
-                console.warn('[dsh-better-display] openWorkspacePath failed:', result?.error?.message);
-              }
-            } else {
-              console.warn('[dsh-better-display] remote.session is not available');
+            // A file click opens the file in the app's own right-hand panel, the
+            // same route the official chat chips use, so a peek never throws the
+            // reader out to an external editor. The desktop app stays reachable
+            // through revealFile and the chip's own menu.
+            const sidebar = ctx.get?.('sidebarRight') as unknown as
+              { openResource?: (address: string, options?: Record<string, unknown>) => void } | undefined;
+            if (sidebar?.openResource && path !== '.' && path !== '') {
+              sidebar.openResource(fileResourceAddress(sessionId, cwd, targetPath));
+              return;
             }
+            // A directory is not a document, and no panel means an external open.
+            await openOnDesktop(ctx, targetPath);
           } catch (error) {
             console.warn('[dsh-better-display] openFile error:', error);
           }

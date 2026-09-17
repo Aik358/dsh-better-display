@@ -10,9 +10,9 @@
   container-type: inline-size;
 }
 .column { max-width: var(--dsh-chat-content-width, 748px); width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-.toolbar { position: sticky; top: 0; z-index: 9; display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 32px; padding: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.toolbar { position: sticky; top: 0; z-index: 6; display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 32px; padding: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 /* 吸顶带第一车道：左「正在处理」+ 右「自动折叠」共享同一 32px 水平基线 */
-.turnProcessSticky { position: sticky; top: 0; z-index: 8; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); min-height: 32px; display: flex; align-items: center; }
+.turnProcessSticky { position: sticky; top: 0; z-index: 5; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); min-height: 32px; display: flex; align-items: center; }
 .turnProcessSticky .disclosureButton { min-height: 32px; }
 /* 第二车道：折叠胶囊吸附在第一车道正下方，互不重叠 */
 .textButton, .historyButton, .iconButton, .jump, .disclosureButton, .imageOpen, .dialogClose { font: inherit; cursor: pointer; }
@@ -115,8 +115,112 @@
 .toolTitle { font-size: 13px; line-height: 22px; font-weight: 500; overflow-wrap: anywhere; }
 .toolTarget { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 19px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .toolHeadingState { display: flex; align-items: center; gap: 7px; min-height: 22px; color: var(--dsw-alias-label-secondary); }
+/* Line counts of the file a tool changed, matching the official tool row:
+   additions read as growth, deletions as loss. Zero sides stay hidden. */
+.diffStat { flex: none; display: inline-flex; gap: 6px; margin-left: 8px; font-size: 11px; line-height: 18px;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; white-space: nowrap; }
+.diffAdded { color: var(--dsw-alias-state-success-primary, #2f9e63); }
+.diffRemoved { color: var(--dsw-alias-state-error-primary, #d1483c); }
+/* A digest row is [label][counts]; the counts sit to the right of the label and
+   open a per-file breakdown directly beneath themselves. A run that changed no
+   files renders nothing here, leaving ordinary process digests untouched. */
+.summaryRow { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.summaryRow > .diffStatRoot { flex: none; }
+.summaryRow > :first-child { min-width: 0; }
+.diffStatRoot { position: relative; flex: none; }
+/* Transparent at rest like the path and count chips beside it; the outline and
+   surface appear on hover or keyboard focus, so the row reads as text until the
+   pointer says otherwise. */
+.diffStatButton { display: inline-flex; gap: 6px; align-items: center; padding: 1px 6px; cursor: pointer;
+  font: inherit; font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum"; color: var(--dsw-alias-label-secondary);
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  transition: background 120ms ease, border-color 120ms ease; }
+.diffStatButton:hover, .diffStatButton:focus-visible,
+.diffStatButton[aria-expanded="true"] {
+  background: var(--dsw-alias-bg-module-platform, rgba(127, 127, 127, .1));
+  border-color: var(--dsw-alias-border-l2, rgba(127, 127, 127, .28)); }
+.diffStatButton:focus-visible { outline: none; }
+/* An in-flow card, never an absolutely positioned popup: the flow cell clips
+   with `overflow: clip`, so a floating panel anchored inside one would be cut
+   off entirely. In flow it also inherits the panel's own scrolling. */
+.diffPanel { width: 100%; max-width: 100%; padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--dsw-alias-bg-module-platform);
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; }
+/* The digest row's counts open the official diff surface below the summary line. */
+.diffOverlay { display: block; margin-top: 6px; }
+.diffStatRoot > .diffOverlay { position: static; display: block; overflow: hidden;
+  transform-origin: top center; will-change: height, opacity, transform; }
+.diffStatButton[aria-expanded="true"] .diffCaret { opacity: 1; }
+.diffTabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+.diffTab { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 2px 8px; cursor: pointer; font: inherit; font-size: 11px; line-height: 16px;
+  color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-module-platform);
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; }
+.diffTab[data-active] { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l1); }
+.diffFile { border-radius: 7px; overflow: hidden; }
+.diffFileRow { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 7px;
+  cursor: pointer; text-align: left; font: inherit; font-size: 12px; color: var(--dsw-alias-label-primary);
+  background: transparent; border: 0; border-radius: 7px; }
+.diffFileRow:hover { background: var(--dsw-alias-bg-module-platform); }
+.diffCaret { flex: none; width: 10px; opacity: .6; font-size: 10px; }
+.diffPath { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  direction: rtl; text-align: left; }
+.diffStat { flex: none; display: inline-flex; gap: 6px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.diffHunkBody { display: flex; flex-direction: column; gap: 4px; padding: 2px 7px 7px 25px; }
+.diffLines { margin: 0; padding: 6px 8px; overflow-x: auto; border-radius: 6px; font-size: 11px; line-height: 1.55;
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); white-space: pre; }
+.diffLines[data-side=removed] { background: color-mix(in srgb, #d1483c 12%, transparent); }
+.diffLines[data-side=added] { background: color-mix(in srgb, #2f9e63 12%, transparent); }
+.diffLineRemoved, .diffLineAdded { display: block; }
+.diffLineRemoved { color: var(--dsw-alias-state-error-primary, #d1483c); }
+.diffLineAdded { color: var(--dsw-alias-state-success-primary, #2f9e63); }
+.diffEmpty { margin: 0; padding: 2px 0; font-size: 11px; color: var(--dsw-alias-label-secondary); }
+/* A step still waiting on its result breathes: the command body itself carries a
+   travelling highlight, and a live counter says how long it has been running, so
+   a slow call reads as working rather than as frozen. Both stop on their own when
+   the result lands, because the running phase disappears with it. */
+.nativeToolSummary[data-running] {
+  background-image: linear-gradient(90deg,
+    currentColor 0%, currentColor 35%,
+    color-mix(in srgb, currentColor 35%, transparent) 50%,
+    currentColor 65%, currentColor 100%);
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: readerStepShimmer 1.6s linear infinite;
+}
+@keyframes readerStepShimmer { to { background-position: -120% 0; } }
+/* The duration stays on a step that ran long, so a slow command keeps its number;
+   a fast one shows nothing once it returns. */
+.toolElapsed[data-slow] { opacity: 1; font-weight: 500;
+  color: var(--dsw-alias-state-warning-primary, #d8862c); }
+.toolElapsed { flex: none; margin-left: 8px; font-size: 11px; line-height: 18px; opacity: .72;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; white-space: nowrap; }
+[data-motion=off] .nativeToolSummary[data-running] { animation: none !important;
+  background-image: none; -webkit-text-fill-color: currentColor; }
+@media (prefers-reduced-motion: reduce) {
+  .nativeToolSummary[data-running] { animation: none !important; background-image: none;
+    -webkit-text-fill-color: currentColor; }
+}
 .toolState { flex: none; font-size: 11px; line-height: 18px; white-space: nowrap; margin-left: 8px; }
 .toolState[data-phase=preparing], .toolState[data-phase=running] { color: var(--dsw-alias-state-business-primary); }
+/* The step that is still running gets a living edge: a breathing dot whose halo
+   expands and fades. Same palette as the turn-status shimmer, no new component. */
+.toolState[data-phase=preparing]::before, .toolState[data-phase=running]::before {
+  content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px;
+  border-radius: 50%; vertical-align: middle; background: currentColor;
+  animation: readerRunningGlow 1.4s ease-in-out infinite;
+}
+@keyframes readerRunningGlow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent); opacity: 1; }
+  70% { box-shadow: 0 0 0 7px transparent; opacity: .7; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+}
+[data-motion=off] .toolState[data-phase=preparing]::before, [data-motion=off] .toolState[data-phase=running]::before { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .toolState[data-phase=preparing]::before, .toolState[data-phase=running]::before { animation: none !important; } }
 .toolState[data-phase=failed] { color: var(--dsw-alias-state-error-primary); }
 .toolState[data-phase=interrupted] { color: inherit; opacity: .7; }
 .toolLedger { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 10px 14px 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 18px; font-variant-numeric: tabular-nums; }
@@ -209,6 +313,32 @@
 .compactionRow { display: flex; flex-direction: column; align-items: center; margin: 16px 0; width: 100%; box-sizing: border-box; }
 .compactionLine { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 18px; user-select: none; }
 .compactionLine::before, .compactionLine::after { content: ''; flex: 1; height: 1px; background: var(--dsw-alias-border-l1); opacity: .7; }
+/* The divider arrives rather than simply appearing: the rule sweeps out from the
+   middle, the pill settles in, and its dial turns once. Same idiom (and the same
+   motion gates) as the rest of the reader's transitions. */
+.compactionRow > .compactionLine { animation: compactionLineIn 520ms cubic-bezier(.4,0,.2,1) both; }
+.compactionRow > .compactionLine > .compactionPill { animation: compactionPillIn 420ms 120ms cubic-bezier(.34,1.4,.64,1) both; }
+.compactionRow > .compactionLine .compactionIcon { animation: compactionDial 900ms 200ms cubic-bezier(.4,0,.2,1) both; }
+@keyframes compactionLineIn {
+  from { opacity: 0; transform: scaleX(.6); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+@keyframes compactionPillIn {
+  from { opacity: 0; transform: translateY(-6px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes compactionDial {
+  from { transform: rotate(-140deg); opacity: 0; }
+  to { transform: rotate(0deg); opacity: .7; }
+}
+[data-motion=off] .compactionRow > .compactionLine,
+[data-motion=off] .compactionRow > .compactionLine > .compactionPill,
+[data-motion=off] .compactionRow > .compactionLine .compactionIcon { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .compactionRow > .compactionLine,
+  .compactionRow > .compactionLine > .compactionPill,
+  .compactionRow > .compactionLine .compactionIcon { animation: none !important; }
+}
 .compactionPill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 12px; background: var(--dsw-alias-bg-module-platform); border: 1px solid var(--dsw-alias-border-l1); color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 18px; font-family: inherit; }
 .compactionButton { cursor: pointer; transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease; }
 .compactionButton:hover { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); }
@@ -275,7 +405,7 @@
 .morphDrawer { overflow: hidden; height: 0; transform-origin: top center; will-change: height, opacity, transform; }
 .liveFoldImpact { animation: liveFoldElastic 180ms cubic-bezier(0.2, 0, 0, 1) both; }
 @keyframes liveFoldElastic { 0% { transform: scale(1); } 50% { transform: scale(1.015); } 100% { transform: scale(1); } }
-.liveFoldContainer { position: sticky; top: 32px; z-index: 8; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent); backdrop-filter: blur(28px) saturate(1.55); -webkit-backdrop-filter: blur(28px) saturate(1.55);
+.liveFoldContainer { position: sticky; top: 32px; z-index: 5; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent); backdrop-filter: blur(28px) saturate(1.55); -webkit-backdrop-filter: blur(28px) saturate(1.55);
   border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.35)) 65%, transparent);
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.18); padding: 4px 0; margin-bottom: 6px; animation: liveFoldPulse 320ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: left center; will-change: transform, opacity; }
@@ -298,6 +428,16 @@
 @media (prefers-reduced-motion: reduce) { .chevron, .imageOpen img, .processMeta, .numberRollDigit { transition: none !important; animation: none !important; } }
 .turnStatus { align-self: flex-start; flex: none; display: inline-flex; align-items: center; height: 26px; font-size: 14px; line-height: 22px; white-space: nowrap; margin: 4px 0 12px; padding: 0 4px; }
 .turnStatusLabel { font-weight: 500; background: linear-gradient(90deg, var(--dsw-static-deepseek-500, #4d6bfe) 0%, var(--dsw-static-deepseek-500, #4d6bfe) 40%, var(--dsw-static-deepseek-200, #a8c7fa) 50%, var(--dsw-static-deepseek-500, #4d6bfe) 60%, var(--dsw-static-deepseek-500, #4d6bfe) 100%); background-position: 100% 0; background-size: 250% 100%; background-clip: text; color: transparent; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: dsh-turn-status-shimmer 1.8s linear infinite; }
+/* The status line and its clock sit on one row, so a wait is timed right where the
+   reader is looking; the bar fills toward ten seconds and then holds while the
+   readout keeps counting and the badge appears. */
+.waitClock { display: inline-flex; align-items: center; flex: none; margin-left: 8px; }
+.waitSeconds { font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum"; color: var(--dsw-alias-label-caption, #86909c); }
+
+.waitOvertime { margin-left: 8px; padding: 0 6px; font-size: 11px; line-height: 16px; border-radius: 5px;
+  color: var(--dsw-alias-state-warning-primary, #d8862c);
+  background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, #d8862c) 16%, transparent); }
 .turnStatusClock { margin-left: 8px; font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; color: var(--dsw-alias-label-caption, #86868b); -webkit-text-fill-color: var(--dsw-alias-label-caption, #86868b); }
 @keyframes dsh-turn-status-shimmer { to { background-position: 0 0; } }
 [data-motion=off] .turnStatusLabel { animation: none !important; color: var(--dsw-static-deepseek-500, #4d6bfe) !important; -webkit-text-fill-color: var(--dsw-static-deepseek-500, #4d6bfe) !important; }
@@ -319,19 +459,21 @@
    The previous shrink-to-fit + max-width chain clipped even four CJK glyphs. */
 /* Sticky lanes float over the transcript: a translucent wash plus blur keeps the
    text behind them legible instead of painting an opaque band over the page. */
-.toolbar { width: 100%; max-width: 100%; align-self: stretch; box-sizing: border-box; min-height: 40px; z-index: 9; border-bottom: 0; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent); backdrop-filter: blur(28px) saturate(1.55); -webkit-backdrop-filter: blur(28px) saturate(1.55);
+.toolbar { width: 100%; max-width: 100%; align-self: stretch; box-sizing: border-box; min-height: 40px; z-index: 6; border-bottom: 0; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent); backdrop-filter: blur(28px) saturate(1.55); -webkit-backdrop-filter: blur(28px) saturate(1.55);
   border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.35)) 65%, transparent);
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.18); }
-.turnProcessSticky { box-sizing: border-box; width: calc(100% - var(--reader-control-width, 148px)); min-height: 40px; margin-right: 8px; z-index: 8; border-bottom: 1px solid transparent; padding-inline: 12px; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent); backdrop-filter: blur(28px) saturate(1.55); -webkit-backdrop-filter: blur(28px) saturate(1.55);
+.turnProcessSticky { box-sizing: border-box; width: calc(100% - var(--reader-control-width, 148px)); min-height: 40px; margin-right: 8px; z-index: 5; border-bottom: 1px solid transparent; padding-inline: 12px; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent); backdrop-filter: blur(28px) saturate(1.55); -webkit-backdrop-filter: blur(28px) saturate(1.55);
   border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.35)) 65%, transparent);
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.18); }
-/* The same summary row stays in flow until it reaches the measured top lane. */
-.flowCell[data-flow-summary], .closedProcessSummary { position: sticky; top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); z-index: 6; overflow: visible; box-sizing: border-box; min-height: 40px; padding-block: 4px; border-bottom: 0; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent); backdrop-filter: blur(28px) saturate(1.55); -webkit-backdrop-filter: blur(28px) saturate(1.55);
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.35)) 65%, transparent);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.18); }
+/* Fold digests scroll with the transcript. Sticking every digest to the same
+   top offset stacked one card on top of the next; only the two measured top
+   lanes (toolbar + turn status) stay pinned, and a digest is just a quiet row. */
+.flowCell[data-flow-summary], .closedProcessSummary { position: static; z-index: auto; overflow: visible; box-sizing: border-box; min-height: 32px; padding-block: 2px; border-bottom: 0; background: transparent;
+  border-left: 2px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,.35)) 80%, transparent);
+  padding-left: 10px;
+  border-radius: 0; }
 .flowCell[data-flow-summary] > .flowCellInner { padding-bottom: 0; }
 .flowCell[data-flow-summary] .disclosureButton, .closedProcessSummary .disclosureButton { width: auto; max-width: 100%; }
 .flowCell[data-flow-summary] .foldSummary, .closedProcessSummary .foldSummary { min-width: 0; }

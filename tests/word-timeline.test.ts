@@ -50,15 +50,25 @@ test('historical and already-received prefixes never replay', () => {
   assert.ok(running.words('已经收到的部分。', 0).every(word => word.born === null));
 });
 
-test('only new word identities receive the reference stagger, with a bounded queue', () => {
+test('only new word identities receive the stagger, and the queue stays bounded', () => {
   const timeline = new WordTimeline();
   timeline.begin('', true, 0, 0);
   timeline.begin('one two three four five six seven', true, 0, 100);
   const words = timeline.words('one two three four five six seven', 0).filter(word => word.text.trim());
-  assert.deepEqual(words.slice(0, 3).map(word => word.born), [100, 160, 220]);
-  assert.ok(words.every(word => word.born! <= 100 + WORD_MOTION.maxDelay));
+  const born = words.map(word => word.born!);
+  // Every word of one batch is scheduled from the same clock, in order, and the
+  // whole batch lands inside the batch window — that is what lets a fast model's
+  // words arrive together instead of dripping out at a fixed per-word cadence.
+  assert.deepEqual(born, [...born].sort((a, b) => a - b));
+  assert.ok(born[0]! >= 100);
+  assert.ok(born.at(-1)! <= 100 + WORD_MOTION.batchMs, `batch ran past its window: ${born.at(-1)}`);
+  // A single later word keeps the original typing rhythm rather than being
+  // silently absorbed into the previous batch.
   timeline.begin('one two three four five six seven eight', true, 0, 900);
-  assert.deepEqual(timeline.words('one two three', 0).filter(word => word.text.trim()).map(word => word.born), [100, 160, 220]);
+  const first = timeline.words('one two three', 0).filter(word => word.text.trim()).map(word => word.born);
+  assert.deepEqual(first, born.slice(0, 3));
+  const added = timeline.words('eight', 40).filter(word => word.text.trim());
+  assert.ok(added[0]!.born! >= 900, 'a lone new word must not be scheduled in the past');
 });
 
 test('stop, motion-off and authoritative replacement cancel old births', () => {

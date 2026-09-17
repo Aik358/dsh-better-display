@@ -7,14 +7,19 @@ test('a transport burst becomes multiple bounded, monotonically growing frames',
   const text = '让新到的文字柔和显现，已经读过的内容保持稳定。'.repeat(6);
   buffer.update(text, 0);
   const frames: string[] = [];
-  for (let time = 16; time <= 256; time += 16) {
+  let firstFrameAt: number | null = null;
+  // The reveal is paced by STREAM_TIMING, so the test asserts the invariants
+  // (many bounded frames, monotonic growth, full convergence in bounded time)
+  // rather than pinning numbers that a pacing change is expected to move.
+  for (let time = 16; time <= STREAM_TIMING.catchUpMs * 2; time += 16) {
     const previous = buffer.visible;
-    if (buffer.advance(time)) frames.push(buffer.visible);
+    if (buffer.advance(time)) { frames.push(buffer.visible); firstFrameAt ??= time; }
     assert.ok(buffer.visible.startsWith(previous));
     assert.ok(text.startsWith(buffer.visible));
   }
-  assert.ok(frames.length > 8);
+  assert.ok(frames.length > 8, `expected many reveal frames, got ${frames.length}`);
   assert.ok(frames[0]!.length < text.length / 4);
+  assert.ok(firstFrameAt !== null && firstFrameAt <= 32, 'the first characters must appear immediately');
   assert.equal(buffer.visible, text);
   assert.equal(buffer.pending, false);
 });

@@ -12,7 +12,7 @@ import { StreamMotionContext } from './streaming.js';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
 import { WaitingStatus } from './WaitingStatus.js';
-import { waitingAnchor } from './waiting-clock.js';
+import { WAIT_AFTER, waitingAnchor } from './waiting-clock.js';
 import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
@@ -282,6 +282,7 @@ function GroupStatus({ group, sessionId, useChat, useSessionPendingInteraction, 
   return <StatusText text={text} motion={motion} shimmer={busy} />;
 }
 
+
 const DeliverableChip = memo(function DeliverableChip({ path, openFile, revealFile }: {
   path: string;
   openFile?: (path: string) => Promise<void> | void;
@@ -522,7 +523,13 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, processOnly
   };
   const terminal = terminalLabel(boundary.reason);
   const hasTurnError = flow.some(item => item.kind === 'node' && nodes.get(item.nodeKey)?.kind === 'turn-error');
-  const showTerminalNotice = terminal && !hasTurnError && boundary.reason !== 'interrupted' && boundary.reason !== 'aborted';
+  // A stopped turn normally stays quiet, but a stopped turn that produced no
+  // prose at all reads as if its answer vanished into the process fold. Say so.
+  const hasAnswerProse = steps.some(step => step.kind === 'body'
+    && step.blocks.some(block => block.kind === 'text' && block.text.trim() !== ''));
+  const stoppedWithoutAnswer = (boundary.reason === 'interrupted' || boundary.reason === 'aborted') && !hasAnswerProse;
+  const showTerminalNotice = terminal && !hasTurnError
+    && (stoppedWithoutAnswer || (boundary.reason !== 'interrupted' && boundary.reason !== 'aborted'));
   const renderStep = (step: LiveStep, folded: boolean) => {
     const processOpen = folded || expanded || processOnly;
     if (step.kind === 'reasoning' || step.kind === 'body') return <BlockBoundary>
@@ -593,37 +600,28 @@ export function Reader(props: ReaderProps) {
 
     const lastKey = order.at(-1);
     const lastNode = lastKey ? nodes.get(lastKey) : undefined;
-    const lastIsUser = lastNode?.kind === 'user' || lastNode?.kind === 'steering';
+    if (!lastKey || !lastNode) return false;
 
-    // 2. 最后一个节点是用户发言（含补发消息）：检查该用户节点**之后**是否已有模型产出。
-    //    之前用 slice(1) 是 Bug——补发消息在组中部，前面的旧输出会让等待永远不出现。
-    if (lastIsUser && lastKey) {
-      const lastGroup = groups.at(-1);
-      const turn = lastGroup?.turn === null || lastGroup?.turn === undefined ? undefined : timeline.turns.get(lastGroup.turn);
-      if (turn?.status === 'closed') return false;
-      const keys = lastGroup?.keys ?? [];
-      const userIdx = keys.lastIndexOf(lastKey);
-      const hasOutputAfter = keys.slice(userIdx + 1).some(key => {
-        const node = nodes.get(key);
-        if (!node || node.visibility === 'hidden') return false;
-        if (node.kind === 'assistant-step') {
-          const data = node.data as { blocks?: unknown[] };
-          return Array.isArray(data.blocks) && data.blocks.length > 0;
-        }
-        return node.kind === 'tool-call' || node.kind === 'tool-return' || node.kind === 'command-input';
-      });
-      return !hasOutputAfter;
-    }
-
-    // 3. assistant-step 已创建但一个 block 都没有：模型收到请求、内容未吐出的瞬间。
-    if (lastNode?.kind === 'assistant-step') {
+    // 2. 模型已经产出内容：等待结束，计时器必须立刻消失。
+    //    「产出」= assistant-step 已带 block（正文/思维链/工具调用都算）。
+    if (lastNode.kind === 'assistant-step') {
       const data = lastNode.data as { status?: string; blocks?: unknown[] };
-      if (data.status === 'running' && (!data.blocks || data.blocks.length === 0)) {
-        return true;
-      }
+      const blocks = data.blocks ?? [];
+      // 空 block 且仍在跑 = 请求已发出、模型还没吐字，正是要计时的那一刻。
+      return blocks.length === 0 && data.status === 'running';
     }
 
-    return false;
+    // 3. 球在模型脚下：用户刚发言，或工具已返回、上下文已注入、命令已执行。
+    //    这些时刻模型随时可能卡住，正是要计时的地方；工具执行期间不计时，
+    //    因为那时忙的是工具而不是模型。
+    const modelOwesResponse = lastNode.kind === 'user' || lastNode.kind === 'steering'
+      || WAIT_AFTER.has(lastNode.kind);
+    if (!modelOwesResponse) return false;
+
+    // 轮次已结束就没什么可等的。
+    const lastGroup = groups.at(-1);
+    const turn = lastGroup?.turn === null || lastGroup?.turn === undefined ? undefined : timeline.turns.get(lastGroup.turn);
+    return turn?.status !== 'closed';
   }, [running, pendingSubmissions, order, nodes, groups, timeline]);
   const scroll = useReadingScroll(root, motion);
   const pinnedKeys = usePinnedSelection(root);

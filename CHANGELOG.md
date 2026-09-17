@@ -21,8 +21,53 @@
   glass as the dsh-auto-memory pane: translucent `bg-layer-2` wash, `blur(28px)`,
   hairline border, 16px radius and a soft lift, instead of an opaque band that
   covered the transcript.
+- Give the whole reading surface the same translucent treatment, so the skinned
+  background shows through consistently: opaque black plates become a light
+  wash with hairlines, and the detail chips (paths, counts, tool state) sit
+  transparent until hovered or focused instead of carrying a filled plate each.
+  This also keeps a row of chips reading as one line of text rather than a
+  strip of buttons.
 - The toolbar reserves the width of its whole control group. Measuring only the
   first button let the status lane paint over every later control.
+- A compaction divider now arrives instead of simply appearing: the rule sweeps
+  out from its centre, the pill settles in, and the dial turns once. Gated by
+  `data-motion=off` and `prefers-reduced-motion` like every other transition.
+
+### Diff review
+
+- Read the changed line counts from the tool result the host already attaches
+  (`meta.diffs`, `{ path, oldText, newText }`), and fall back to the call's own
+  arguments for `write` / `edit` / `str_replace_editor` when a host build does
+  not send them. The name whitelist matters: several unrelated tools take a
+  field called `content`, and counting those invented additions for calls that
+  changed no file.
+- Fold a parent call's child calls into its own counts. A `run_code` that writes
+  files reports what its children changed rather than what its own arguments
+  contain, so a run whose edits live one level down no longer loses its counts.
+  Each child contributes through its own arguments, read from either the landed
+  result or the pending call.
+- `+N -M` sits at the end of the row in green/red and opens a panel listing one
+  entry per changed file — the file tabs, the removed lines on a red wash and
+  the added lines on a green one, using the same `DiffBlock` primitive the
+  official tool row renders. The panel is in flow, never a floating popup, so
+  the flow cell's `overflow: clip` cannot cut it off.
+- Opening and closing the panel animate real height in the plugin's own motion
+  language, and the card is brought back into view when it opens below the
+  fold; an open panel keeps its caret lit.
+
+### Waiting and timing
+
+- Show how long the model has been given the turn, next to 「深度求索中」and the
+  in-flow wait indicator. The clock is anchored to the last event that handed
+  control to the model — a returned tool, an injected context, a run command,
+  the user's own message — never to the start of the turn, so a wait that has
+  just begun does not inherit the minutes the tools already spent.
+- Past ten seconds the readout adds a「暂未响应」badge, and the moment the model
+  produces its first block the whole indicator is withdrawn. A tool that is
+  still running is not a wait: the tool is the one working.
+- A command that ran long keeps its duration after it returns (warning colour
+  past ten seconds); a fast one shows nothing once it is done. Running steps
+  show a live seconds readout and a shimmering summary while they work.
 
 ### Scroll
 
@@ -33,6 +78,19 @@
   is mounted: it moved the viewport on its own as the transcript grew.
 - Only a focused text field suspends following, and only inside the reader.
   Focusing the composer used to stop the transcript from advancing.
+- Stream at the source's own rate: add a feed-forward term estimated from the
+  arrival rate on top of the proportional controller. A purely proportional
+  reveal settles at a constant `catchUpMs` of lag regardless of model speed,
+  which read as 「慢」 while the backlog grew with faster models; the feed-forward
+  term drains the backlog and the proportional term absorbs transport jitter.
+- Reveal a batch of words on one clock instead of one word per fixed gap.
+  Per-word spacing pinned the rate near 16 words/second, so a fast model still
+  arrived one word at a time; a batch now lands inside one short window while a
+  lone new word keeps the original typing cadence.
+- The reasoning pane's own follow steps with the backlog rather than at a fixed
+  step-and-hold: it used to advance two lines every ~1.3 seconds no matter how
+  fast the text arrived, which is what made the pane look like it was lagging
+  behind a fast model.
 ## 0.1.1 — 2026-09-16
 
 The accepted reading-view integration, including the work consolidated from PRs #2, #5 and #8. Earlier `0.2.0` / `0.2.1` headings were unpublished development notes; those changes ship in this release, not as separate published versions.

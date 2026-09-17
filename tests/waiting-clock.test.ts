@@ -12,7 +12,11 @@ const get=(key:string)=>nodes.get(key);
 test('ordinary waiting starts at user input',()=>assert.deepEqual(waitingAnchor(['u1'],get),{key:'u1',time:1000}));
 test('steering resets a five-minute-old turn to the new input',()=>assert.deepEqual(waitingAnchor(['u1','s1'],get),{key:'s1',time:301000}));
 test('repeated steering resets even while the waiting indicator stays mounted',()=>assert.deepEqual(waitingAnchor(['u1','s1','s2'],get),{key:'s2',time:305000}));
-test('assistant, context and tool rerenders do not reset waiting',()=>assert.deepEqual(waitingAnchor(['u1','s1','a1','ctx'],get),{key:'s1',time:301000}));
+// An assistant-step mid-turn is not a handover, so the wait keeps its earlier clock.
+test('an assistant step does not reset waiting',()=>assert.deepEqual(waitingAnchor(['u1','s1','a1'],get),{key:'s1',time:301000}));
+// Context injection IS a handover: the model owes the next move from that moment,
+// and the clock must not keep counting the minutes spent before it.
+test('context injection restarts the wait',()=>assert.deepEqual(waitingAnchor(['u1','s1','a1','ctx'],get),{key:'ctx',time:399000}));
 test('local echo resets immediately before steering admission',()=>assert.deepEqual(waitingAnchor(['u1'],get,[{requestId:'new',time:301000,placement:'next-step'}]),{key:'pending:new',time:301000}));
 test('queued future turns and stale echoes cannot reset current waiting',()=>{
  assert.deepEqual(waitingAnchor(['u1','s1'],get,[{requestId:'q',time:400000,placement:'queued'}]),{key:'s1',time:301000});
