@@ -1,14 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { waitingAnchor } from '../src/client/waiting-clock.js';
+import { WAIT_AFTER, waitingAnchor } from '../src/client/waiting-clock.js';
 const nodes = new Map([
  ['u1', {kind:'user',data:{time:1000}}],
  ['s1', {kind:'steering',data:{time:301000}}],
  ['s2', {kind:'steering',data:{time:305000}}],
  ['a1', {kind:'assistant-step',data:{time:302000}}],
  ['ctx', {kind:'context',data:{time:399000}}],
+ ['tr', {kind:'tool-result',data:{time:61000}}],
 ]);
 const get=(key:string)=>nodes.get(key);
+// Every kind the reader can wait after must be a real node kind. A set naming a
+// kind that never occurs silently disables the clock for that case, which is
+// exactly what 'tool-return' did: the real kind is 'tool-result', so a returned
+// tool never restarted the wait.
+// The kinds a wait may start after, taken from the conversation contract. Listing
+// them here is the point: the previous set named 'tool-return', which is not a
+// node kind at all (it is 'tool-result'), so a returned tool never restarted the
+// wait and the indicator simply did not appear.
+const HANDOVER_KINDS = ['tool-result', 'context', 'command', 'model-retry'] as const;
+test('the handover set names real node kinds',()=>{
+  assert.ok(!WAIT_AFTER.has('tool-return'), 'tool-return is not a node kind');
+  for (const kind of HANDOVER_KINDS) assert.ok(WAIT_AFTER.has(kind), kind);
+});
+test('a returned tool restarts the wait',()=>assert.deepEqual(waitingAnchor(['u1','s1','tr'],get),{key:'tr',time:61000}));
 test('ordinary waiting starts at user input',()=>assert.deepEqual(waitingAnchor(['u1'],get),{key:'u1',time:1000}));
 test('steering resets a five-minute-old turn to the new input',()=>assert.deepEqual(waitingAnchor(['u1','s1'],get),{key:'s1',time:301000}));
 test('repeated steering resets even while the waiting indicator stays mounted',()=>assert.deepEqual(waitingAnchor(['u1','s1','s2'],get),{key:'s2',time:305000}));

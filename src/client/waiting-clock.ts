@@ -8,7 +8,7 @@ const timestamp = (value: number | undefined): number | null => typeof value ===
  * returns, context is injected, a command runs. The model is on the hook from
  * one of these, and can stall there; while a tool is running it is not.
  */
-export const WAIT_AFTER = new Set(['tool-return', 'command-input', 'context', 'model-retry', 'command']);
+export const WAIT_AFTER = new Set(['tool-result', 'command-input', 'context', 'model-retry', 'command']);
 
 /**
  * The moment the current wait began.
