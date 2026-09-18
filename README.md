@@ -2,11 +2,25 @@
 
 [English](./README.en.md)
 
+推荐用 npm（可钉版本）：
+
+```sh
+dsh plugin --profile web add dsh-better-display@0.1.1
+```
+
+也可以装 latest：
+
+```sh
+dsh plugin --profile web add dsh-better-display
+```
+
+备选：从 GitHub 直装（跟默认分支最新提交）：
+
 ```sh
 dsh plugin --profile web add github:aa2246740/dsh-better-display
 ```
 
-PATH 上要有官方 `dsh`（没有就用 `npx @deepseek-ai/dsh`）和 **pnpm**。`dsh plugin add` 会在 `$DSH_HOME/profiles/web` 里跑 pnpm。仓库已提交编译好的 `lib/`，git 安装不用 `prepare`，也不用改 profile 的 `allowBuilds`。
+PATH 上要有官方 `dsh`（没有就用 `npx @deepseek-ai/dsh`）和 **pnpm**。`dsh plugin add` 会在 `$DSH_HOME/profiles/web` 里跑 pnpm。仓库已提交编译好的 `lib/`，git / npm 安装都不用 `prepare`，也不用改 profile 的 `allowBuilds`。
 
 然后重启这个 Host，再刷新页面。`dsh plugin add` 只写 profile，不会热挂正在跑的进程。
 
