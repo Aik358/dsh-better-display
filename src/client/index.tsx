@@ -190,6 +190,32 @@ export function apply(ctx: Context): void {
             return false;
           }
         },
+        getToolView: (toolName: string) => {
+          try {
+            const slotsService = ctx.slots as unknown as { entriesOfSlot?: (name: string) => unknown[] };
+            const entries = slotsService?.entriesOfSlot?.('tool.call.toolview') ?? [];
+            const matches = entries.filter((e: any) => {
+              const key = e?.options?.key ?? e?.key;
+              const comp = e?.component ?? e?.view ?? e?.render ?? (typeof e === 'function' ? e : null);
+              return key === toolName && typeof comp === 'function';
+            });
+            if (matches.length === 0) return null;
+            matches.sort((a: any, b: any) => {
+              const prioA = a?.options?.priority ?? a?.priority ?? 0;
+              const prioB = b?.options?.priority ?? b?.priority ?? 0;
+              return prioA - prioB;
+            });
+            const best = matches[0] as any;
+            const prio = best?.options?.priority ?? best?.priority ?? 0;
+            const comp = best?.component ?? best?.view ?? best?.render ?? (typeof best === 'function' ? best : null);
+            if (prio < 0 || (toolName !== 'edit' && toolName !== 'write')) {
+              return comp;
+            }
+            return null;
+          } catch {
+            return null;
+          }
+        },
       };
     },
     }, Reader);

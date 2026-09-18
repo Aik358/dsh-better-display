@@ -548,6 +548,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinned
     forkSeq,
     fileMentions,
     metrics,
+    getToolView: props.getToolView,
   };
   const terminal = terminalLabel(boundary.reason);
   const hasTurnError = flow.some(item => item.kind === 'node' && nodes.get(item.nodeKey)?.kind === 'turn-error');
