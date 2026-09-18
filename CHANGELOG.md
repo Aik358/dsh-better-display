@@ -1,20 +1,41 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-09-18
+
+### Diff review and tool presentation
+
+- Re-engineered diff review panel: line addition/deletion statistics (`+A -R`) are pushed
+  flush to the right margin, perfectly aligned on the same 32px baseline as the summary text.
+- Diff overlay expands cleanly within the reading column (0px horizontal overflow) with
+  independent vertical scrolling (`max-height: 420px; overscroll-behavior: contain`),
+  preventing mouse-wheel events from leaking into the conversation stream.
+- Multi-file tabs scroll horizontally with adaptive content height on file switches.
+- PR #12 custom tool cards: delegate tool view rendering to `tool.call.toolview` slot with
+  error boundary isolation and auto-expand capabilities.
+
+### Translucent frosted glass and skin mode
+
+- Translucent frosted glass mode is an opt-in toggle in Settings.
+- When enabled, all card backgrounds, tool detail frames, and code blocks become translucent
+  with backdrop blur, eliminating opaque white patches and seamlessly adapting to third-party
+  wallpaper and window skins.
+
+### Refined folding and liveness
+
+- Reverted to a single, intuitive auto-fold toggle (**自动折叠开 / 关**) on the reading toolbar
+  and in Settings, removing complex multi-level rules while keeping reasoning and tools
+  completely unfolded when turned off.
+- Fixed line-wrapping bug so digest rows stay strictly single-line when space permits.
+- Real-time wait clocks (`WaitClock`), execution time tracking, and token throughput
+  metrics (`TurnMetrics`) fully preserved and active.
+- Animated disclosures include fallback timeouts to prevent rendering stalls.
 
 ### Better Display settings
 
-- Glass, fold intensity, and deliverable open-mode share the root `dsh.reader.v1`
-  store (`store.create()`, no session suffix) so Settings and the reading view
-  stay in sync across refresh.
-- Translucent frosted glass is a Settings toggle, default **off**. Off keeps the
-  current-main opaque chrome. On uses the community PR #14 wash so host wallpaper
-  and skins show through; chips stay clear until hover or focus.
-- Process fold is one three-stop control (slider + segmented): **0 不折叠** (no
-  auto-fold), **1 标准折叠** (default, current-main fold-on-next-reasoning),
-  **2 过程摘要** (PR #14 process summaries). The reading view updates live.
-- Deliverable open-mode stays the #13 switch: default system app, optional
-  Sidebar. Folder/reveal stay OS. No second open-mode setting.
+- Glass, auto-fold, and deliverable open-mode share the root `dsh.reader.v1` store so
+  Settings and the reading view stay in sync across refresh.
+- Deliverable open-mode: default system app, optional Sidebar. Folder/reveal stay OS.
+- Generative-mcpapps skill installation detection and status reporting.
 
 ### Compatibility and liveness
 
