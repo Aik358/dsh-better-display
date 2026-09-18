@@ -2,6 +2,7 @@ import type { ChatConversationViewNode } from '@deepseek-ai/dsh-client-ui-chat/c
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { TurnBoundary } from './projection.js';
 import type { ReaderFlowEntry, ToolActivityEntry } from './tool-activity.js';
+import type { FoldIntensity } from './fold-intensity.js';
 export type LiveStep = {
     kind: 'reasoning';
     key: string;
@@ -66,5 +67,6 @@ export declare function processSummary(steps: readonly LiveStep[]): string;
  * @returns items where finished process runs are folded.
  */
 export declare function splitProcessChain(chain: readonly LiveStep[], turnOpen: boolean): LiveTurnItem[];
+export declare function presentForIntensity(steps: readonly LiveStep[], boundary: TurnBoundary, intensity: FoldIntensity): LiveTurnItem[];
 export declare function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold?: boolean, processOnly?: boolean): LiveTurnItem[];
 //# sourceMappingURL=live-turn.d.ts.map

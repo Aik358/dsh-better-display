@@ -56,6 +56,16 @@ export interface DiffHunk {
     oldText: string | null;
     newText: string;
 }
+/**
+ * The changed files of a mutation call.
+ *
+ * Result metadata is preferred when the host attaches it. Not every host build
+ * does, so the call's own arguments are the fallback — the same source the
+ * official row reads while a write is still pending. A call whose arguments hold
+ * none of these fields (a read, a listing) yields nothing and shows no counts.
+ */
+/** Only these tools change a file, so only these may fall back to their arguments. */
+export declare const DIFF_FALLBACK_TOOLS: readonly ["write", "edit", "str_replace_editor"];
 export declare function callDiffHunks(block: ToolCallBlock | undefined, args?: Record<string, unknown>, name?: string): DiffHunk[];
 /** Added/removed line counts for one call, or null when there is nothing to show. */
 export declare function diffTotals(block: ToolCallBlock | undefined, args?: Record<string, unknown>, name?: string): {

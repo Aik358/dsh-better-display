@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   deliverableOpenModeOf,
   fileAddressFor,
@@ -8,6 +11,14 @@ import {
   openDeliverableFile,
   resolveOpenWorkspacePath,
 } from '../src/client/open-file.ts';
+
+test('index still routes opens through #13 open-mode, not a forced sidebar', () => {
+  const index = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/client/index.tsx'), 'utf8');
+  assert.match(index, /modeFromSnapshot\(prefs\)/);
+  assert.match(index, /openDeliverableFile/);
+  assert.doesNotMatch(index, /openOnDesktop/);
+  assert.doesNotMatch(index, /sidebarRight\.openResource!\(address\)/);
+});
 
 test('deliverable open mode defaults to external', () => {
   assert.equal(deliverableOpenModeOf(undefined), 'external');

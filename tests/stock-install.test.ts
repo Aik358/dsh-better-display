@@ -34,6 +34,14 @@ test('commits compiled lib entries and does not require a prepare script', () =>
   assert.match(clientJs, /id:\s*"dsh-better-display"/);
   assert.match(clientJs, /settings\.section/);
   assert.match(clientJs, /deliverableOpenMode/);
+  assert.match(clientJs, /frostedGlass/);
+  assert.match(clientJs, /foldIntensity/);
+  assert.match(clientJs, /setFrostedGlass/);
+  assert.match(clientJs, /setFoldIntensity/);
+  assert.match(clientJs, /data-reader-glass/);
+  assert.match(clientJs, /modeFromSnapshot/);
+  assert.match(clientJs, /str_replace_editor/);
+  assert.doesNotMatch(clientJs, /只折叠过程/);
   assert.match(clientJs, /\.dsh\/skills/);
   assert.doesNotMatch(clientJs, /submission\.images\.length/);
 });

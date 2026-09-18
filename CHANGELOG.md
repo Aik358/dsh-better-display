@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Better Display settings
+
+- Glass, fold intensity, and deliverable open-mode share the root `dsh.reader.v1`
+  store (`store.create()`, no session suffix) so Settings and the reading view
+  stay in sync across refresh.
+- Translucent frosted glass is a Settings toggle, default **off**. Off keeps the
+  current-main opaque chrome. On uses the community PR #14 wash so host wallpaper
+  and skins show through; chips stay clear until hover or focus.
+- Process fold is one three-stop control (slider + segmented): **0 不折叠** (no
+  auto-fold), **1 标准折叠** (default, current-main fold-on-next-reasoning),
+  **2 过程摘要** (PR #14 process summaries). The reading view updates live.
+- Deliverable open-mode stays the #13 switch: default system app, optional
+  Sidebar. Folder/reveal stay OS. No second open-mode setting.
+
 ### Compatibility and liveness
 
 - A wait now restarts when a tool returns. The handover set named kinds from the
@@ -43,26 +57,20 @@
 - A later reasoning step folds only the finished process run it follows. The run
   that is still streaming stays fully expanded, so a long turn reads as
   alternating digests and prose instead of collapsing mid-thought.
-- Add a process-only fold mode (`只折叠过程`). Prose is never folded; each
-  finished run of reasoning / tool / record steps collapses into one digest that
-  names what the tools actually did (`读取 Reader.tsx`, `运行 pnpm test`,
-  `搜索 processSummary`), read from the same tool identity the tool cards use.
-  Off by default, so the existing auto-fold behaviour is unchanged.
+- Fold intensity 2 (`过程摘要`) is PR #14's process-only mode: prose is never
+  folded; each finished run of reasoning / tool / record steps collapses into
+  one digest that names what the tools actually did (`读取 Reader.tsx`,
+  `运行 pnpm test`), read from the same tool identity the tool cards use. It is
+  not the default — standard fold (level 1) keeps current-main choreography.
 - A finished process-only turn folds its trailing run too, and skips the
   duplicate closed-turn counter row it no longer needs.
 
 ### Reading surface
 
-- Sticky lanes (toolbar, status, fold summary, live fold) use the same liquid
-  glass as the dsh-auto-memory pane: translucent `bg-layer-2` wash, `blur(28px)`,
-  hairline border, 16px radius and a soft lift, instead of an opaque band that
-  covered the transcript.
-- Give the whole reading surface the same translucent treatment, so the skinned
-  background shows through consistently: opaque black plates become a light
-  wash with hairlines, and the detail chips (paths, counts, tool state) sit
-  transparent until hovered or focused instead of carrying a filled plate each.
-  This also keeps a row of chips reading as one line of text rather than a
-  strip of buttons.
+- When frosted glass is on, sticky lanes use the same liquid glass as the
+  dsh-auto-memory pane: translucent `bg-layer-2` wash, `blur(28px)`, hairline
+  border, 16px radius and a soft lift. Detail chips stay transparent until
+  hovered or focused. When the toggle is off, chrome matches current main.
 - The toolbar reserves the width of its whole control group. Measuring only the
   first button let the status lane paint over every later control.
 - A compaction divider now arrives instead of simply appearing: the rule sweeps

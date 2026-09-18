@@ -53,30 +53,11 @@ export { McpAppFrame } from './McpAppFrame.js';
 export const name = 'dsh-better-display-client';
 export const inject = ['slots', 'sessions', 'conversation', 'remote', 'remote.session'];
 
-/** Open a path (or reveal it) with the desktop's own file handling. */
-async function openOnDesktop(ctx: Context, targetPath: string, action?: 'reveal'): Promise<void> {
-  const remote = ctx.remote as unknown as { session?: SessionOpenFace } | undefined;
-  const face = remote?.session
-    ?? (ctx.get?.('remote.session') as unknown as SessionOpenFace | undefined)
-    ?? ((ctx.get?.('remote') as unknown as { session?: SessionOpenFace } | undefined)?.session);
-  if (!face?.openWorkspacePath) {
-    console.warn('[dsh-better-display] no desktop opener is available for', targetPath);
-    return;
-  }
-  // The RPC answers { opened: true }; a missing field is not a failure.
-  const result = await face.openWorkspacePath(action ? { path: targetPath, action } : { path: targetPath });
-  if (result && result.opened === false) console.warn('[dsh-better-display] desktop open refused:', targetPath);
-}
-
-interface SessionOpenFace {
-  openWorkspacePath: (arg: { path: string; action?: 'reveal' }) => Promise<{ opened?: boolean } | undefined>;
-}
-
 export function apply(ctx: Context): void {
   const store = createReaderStore();
   // conversation.view is session-scoped, so session persist keys are
-  // `dsh.reader.v1.<sessionId>`. One root instance keeps the open-mode
-  // switch on the unsuffixed `dsh.reader.v1` key.
+  // `dsh.reader.v1.<sessionId>`. One root instance keeps glass, fold
+  // intensity, and open-mode on the unsuffixed `dsh.reader.v1` key.
   const prefs = store.create();
   installBetterDisplaySettings(ctx, prefs);
   ctx.slots.inject('conversation.view', function* () {

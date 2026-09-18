@@ -4,6 +4,8 @@ import { assistantSegments, hasVisibleBody } from './projection.js';
 import type { TurnBoundary } from './projection.js';
 import { activitySummary, stringValue } from './tool-activity.js';
 import type { ReaderFlowEntry, ToolActivityEntry } from './tool-activity.js';
+import type { FoldIntensity } from './fold-intensity.js';
+import { autoFoldFromIntensity, processOnlyFromIntensity } from './fold-intensity.js';
 
 export type LiveStep =
   | { kind: 'reasoning'; key: string; nodeKey: string; start: number; blocks: AssistantBlock[]; step: number }
@@ -220,6 +222,15 @@ export function splitProcessChain(chain: readonly LiveStep[], turnOpen: boolean)
   commit();
   return items;
 }
+
+export function presentForIntensity(
+  steps: readonly LiveStep[],
+  boundary: TurnBoundary,
+  intensity: FoldIntensity,
+): LiveTurnItem[] {
+  return presentLiveTurn(steps, boundary, autoFoldFromIntensity(intensity), processOnlyFromIntensity(intensity));
+}
+
 export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold = true, processOnly = false): LiveTurnItem[] {
   const turnOpen = liveFoldEnabled(boundary);
   // Auto-fold still only acts inside an open turn; the process-only mode also

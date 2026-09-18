@@ -173,7 +173,8 @@ function firstString(source: Record<string, unknown> | undefined, fields: readon
  * none of these fields (a read, a listing) yields nothing and shows no counts.
  */
 /** Only these tools change a file, so only these may fall back to their arguments. */
-const MUTATION_TOOLS = new Set(['write', 'edit', 'str_replace_editor']);
+export const DIFF_FALLBACK_TOOLS = ['write', 'edit', 'str_replace_editor'] as const;
+const MUTATION_TOOLS = new Set<string>(DIFF_FALLBACK_TOOLS);
 
 export function callDiffHunks(
   block: ToolCallBlock | undefined,

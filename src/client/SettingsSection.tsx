@@ -1,13 +1,26 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { foldIntensityOf, frostedGlassOf, type FoldIntensity } from './fold-intensity.js';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
 import { settingsCopyFor, type SettingsCopy, type SettingsCopyKey } from './settings-copy.js';
 import { CONVENTIONAL_SKILL_ROOTS, detectGenerativeMcpappsSkill, shortestInstallCommand, type SkillStatusProbe, type SkillStatusSnapshot } from './skill-status.js';
 import css from './SettingsSection.module.css';
 
+export interface ReaderPrefsSnapshot {
+  deliverableOpenMode?: DeliverableOpenMode;
+  frostedGlass?: boolean;
+  foldIntensity?: FoldIntensity;
+  autoFold?: boolean;
+  processOnly?: boolean;
+}
+
 export interface OpenPrefs {
-  getSnapshot: () => { deliverableOpenMode?: DeliverableOpenMode };
+  getSnapshot: () => ReaderPrefsSnapshot;
   subscribe: (fn: () => void) => () => void;
-  actions: { setDeliverableOpenMode: (value: DeliverableOpenMode) => void };
+  actions: {
+    setDeliverableOpenMode: (value: DeliverableOpenMode) => void;
+    setFrostedGlass: (value: boolean) => void;
+    setFoldIntensity: (value: FoldIntensity) => void;
+  };
 }
 
 export interface BetterDisplaySettingsInjected {
@@ -35,13 +48,22 @@ function text(props: SettingsProps, copy: SettingsCopy, key: keyof SettingsCopy)
   return copy[key];
 }
 
+const FOLD_STOPS: { value: FoldIntensity; key: 'foldNone' | 'foldStandard' | 'foldSummary' }[] = [
+  { value: 0, key: 'foldNone' },
+  { value: 1, key: 'foldStandard' },
+  { value: 2, key: 'foldSummary' },
+];
+
 export function SettingsSection(props: SettingsProps) {
   const copy = props.copy ?? settingsCopyFor(props.languageTag);
-  const mode = deliverableOpenModeOf(useSyncExternalStore(
+  const snap = useSyncExternalStore(
     props.prefs.subscribe,
-    () => props.prefs.getSnapshot()?.deliverableOpenMode,
-    () => 'external',
-  ));
+    () => props.prefs.getSnapshot() ?? ({} as ReaderPrefsSnapshot),
+    () => ({} as ReaderPrefsSnapshot),
+  );
+  const mode = deliverableOpenModeOf(snap.deliverableOpenMode);
+  const glass = frostedGlassOf(snap);
+  const intensity = foldIntensityOf(snap);
   const setMode = (value: DeliverableOpenMode) => {
     props.prefs.actions.setDeliverableOpenMode(value);
   };
@@ -83,6 +105,60 @@ export function SettingsSection(props: SettingsProps) {
           data-on={on || undefined}
           data-better-display-open-mode={mode}
           onClick={() => { setMode(on ? 'external' : 'sidebar'); }}
+        />
+      </div>
+
+      <div className={css.row}>
+        <div className={css.rowText}>
+          <div className={css.title}>{text(props, copy, 'glassTitle')}</div>
+          <div className={css.desc}>{text(props, copy, 'glassDescription')}</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={glass}
+          className={css.switch}
+          data-on={glass || undefined}
+          data-better-display-glass={glass ? 'on' : 'off'}
+          onClick={() => { props.prefs.actions.setFrostedGlass(!glass); }}
+        />
+      </div>
+
+      <div className={css.block} data-better-display-fold={intensity}>
+        <div className={css.title}>{text(props, copy, 'foldTitle')}</div>
+        <div className={css.desc}>{text(props, copy, 'foldDescription')}</div>
+        <div className={css.segment} role="radiogroup" aria-label={text(props, copy, 'foldTitle')}>
+          {FOLD_STOPS.map(stop => (
+            <button
+              key={stop.value}
+              type="button"
+              role="radio"
+              aria-checked={intensity === stop.value}
+              className={css.segmentStop}
+              data-on={intensity === stop.value || undefined}
+              data-better-display-fold-stop={stop.value}
+              onClick={() => { props.prefs.actions.setFoldIntensity(stop.value); }}
+            >
+              {text(props, copy, stop.key)}
+            </button>
+          ))}
+        </div>
+        <input
+          type="range"
+          className={css.slider}
+          min={0}
+          max={2}
+          step={1}
+          value={intensity}
+          aria-valuemin={0}
+          aria-valuemax={2}
+          aria-valuenow={intensity}
+          aria-valuetext={text(props, copy, FOLD_STOPS[intensity]?.key ?? 'foldStandard')}
+          data-better-display-fold-slider={intensity}
+          onChange={event => {
+            const next = Number(event.target.value);
+            if (next === 0 || next === 1 || next === 2) props.prefs.actions.setFoldIntensity(next);
+          }}
         />
       </div>
 

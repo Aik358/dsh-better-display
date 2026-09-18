@@ -1,13 +1,21 @@
+import { type FoldIntensity } from './fold-intensity.js';
 import { type DeliverableOpenMode } from './open-file.js';
 import { type SettingsCopy, type SettingsCopyKey } from './settings-copy.js';
 import { type SkillStatusProbe } from './skill-status.js';
+export interface ReaderPrefsSnapshot {
+    deliverableOpenMode?: DeliverableOpenMode;
+    frostedGlass?: boolean;
+    foldIntensity?: FoldIntensity;
+    autoFold?: boolean;
+    processOnly?: boolean;
+}
 export interface OpenPrefs {
-    getSnapshot: () => {
-        deliverableOpenMode?: DeliverableOpenMode;
-    };
+    getSnapshot: () => ReaderPrefsSnapshot;
     subscribe: (fn: () => void) => () => void;
     actions: {
         setDeliverableOpenMode: (value: DeliverableOpenMode) => void;
+        setFrostedGlass: (value: boolean) => void;
+        setFoldIntensity: (value: FoldIntensity) => void;
     };
 }
 export interface BetterDisplaySettingsInjected {

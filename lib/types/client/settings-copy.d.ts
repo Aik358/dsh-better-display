@@ -1,4 +1,4 @@
-export type SettingsCopyKey = 'nav' | 'openTitle' | 'openDescription' | 'skillTitle' | 'skillInstalled' | 'skillMissing' | 'skillPurpose' | 'skillPluginNote' | 'skillInstall' | 'skillRecheck' | 'skillChecking' | 'skillUnavailable';
+export type SettingsCopyKey = 'nav' | 'openTitle' | 'openDescription' | 'glassTitle' | 'glassDescription' | 'foldTitle' | 'foldDescription' | 'foldNone' | 'foldStandard' | 'foldSummary' | 'skillTitle' | 'skillInstalled' | 'skillMissing' | 'skillPurpose' | 'skillPluginNote' | 'skillInstall' | 'skillRecheck' | 'skillChecking' | 'skillUnavailable';
 export type SettingsCopy = Record<SettingsCopyKey, string>;
 export declare const en: SettingsCopy;
 export declare const zh: SettingsCopy;

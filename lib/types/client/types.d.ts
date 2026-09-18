@@ -32,12 +32,21 @@ export interface ReaderInjected {
     fillComposer: (text: string) => boolean;
     /** Open a workspace file or directory; mode comes from the Better Display setting. */
     openFile: (path: string) => Promise<void> | void;
-    /** Root-scoped open-mode snapshot (`dsh.reader.v1`), shared with Settings. */
+    /** Root-scoped Better Display prefs (`dsh.reader.v1`), shared with Settings. */
     openPrefs?: {
         getSnapshot: () => {
             deliverableOpenMode?: import('./open-file.js').DeliverableOpenMode;
+            frostedGlass?: boolean;
+            foldIntensity?: import('./fold-intensity.js').FoldIntensity;
+            autoFold?: boolean;
+            processOnly?: boolean;
         };
         subscribe: (fn: () => void) => () => void;
+        actions?: {
+            setFoldIntensity?: (value: import('./fold-intensity.js').FoldIntensity) => void;
+            setFrostedGlass?: (value: boolean) => void;
+            setDeliverableOpenMode?: (value: import('./open-file.js').DeliverableOpenMode) => void;
+        };
     };
     /** Reveal and highlight a workspace file in macOS Finder or Windows Explorer. */
     revealFile?: (path: string) => Promise<void> | void;
