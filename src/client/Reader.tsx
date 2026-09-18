@@ -19,9 +19,9 @@ import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
-import { presentForIntensity, segmentLiveTurn } from './live-turn.js';
+import { presentLiveTurn, segmentLiveTurn } from './live-turn.js';
 import type { LiveStep } from './live-turn.js';
-import { foldIntensityOf, frostedGlassOf, type FoldIntensity } from './fold-intensity.js';
+import { frostedGlassOf } from './fold-intensity.js';
 import { ChoreographedFlow, useFlowChat } from './ChoreographedFlow.js';
 import { ClosedProcessSummary } from './ClosedProcessSummary.js';
 import { StickyLane } from './StickyLane.js';
@@ -143,8 +143,8 @@ const ProcessNode = memo(function ProcessNode({ useChat, t, nodeKey, open, motio
   return content && <ProcessFragment open={open} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>{content}</ProcessFragment>;
 });
 
-const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, processOnly = false, partStart, motion, onRead, returnFocusTo, ...render }: SeatProps & {
-  motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>; partStart?: number; folded?: boolean; processOnly?: boolean;
+const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, partStart, motion, onRead, returnFocusTo, ...render }: SeatProps & {
+  motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>; partStart?: number; folded?: boolean;
 }) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   if (!node || node.visibility === 'hidden' || !isNode(node, 'assistant-step')) return null;
@@ -152,9 +152,7 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
   const parts = assistantSegments(data.blocks);
   const earlier = isEarlierNarration(data, boundary);
   const hasToolCalls = data.blocks.some(block => block.kind === 'tool-call');
-  // Process-only mode never demotes prose: narration stays a readable answer
-  // even when it belongs to an earlier step, and only reasoning/tools fold.
-  const isProcessStep = !processOnly && (earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep));
+  const isProcessStep = earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
   const body = data.blocks.filter(block => block.kind !== 'reasoning' && block.kind !== 'tool-call');
   const visible = partStart === undefined ? parts : parts.filter(part => part.start === partStart);
   return <>{visible.map(part => {
@@ -172,7 +170,7 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </article>
     </ProcessFragment>
-    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={processOnly || pinned || processOpen || (!earlier && !folded)}>
+    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
       <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
         {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
@@ -472,7 +470,7 @@ function DeliverablesRow({ deliverables, openFile, revealFile, openMode }: {
   );
 }
 
-const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinnedKeys, selectedProcessKeys, isAwaitingModel = false, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; foldIntensity: FoldIntensity; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[]; isAwaitingModel?: boolean }) {
+const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys, selectedProcessKeys, isAwaitingModel = false, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; autoFold: boolean; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[]; isAwaitingModel?: boolean }) {
   const snapshot = props.useChat(snapshot => snapshot);
   const nodes = snapshot.nodes;
   const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
@@ -490,8 +488,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinned
   const mainKeys = startsWithUser ? group.keys.slice(1) : group.keys;
   const flow = useMemo(() => readerFlow({ ...group, keys: mainKeys }, turn, key => nodes.get(key)), [nodes, group, mainKeys, turn]);
   const steps = useMemo(() => segmentLiveTurn(flow, key => nodes.get(key)), [flow, nodes]);
-  const processOnly = foldIntensity === 2;
-  const liveItems = useMemo(() => presentForIntensity(steps, boundary, foldIntensity), [steps, boundary, foldIntensity]);
+  const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold), [steps, boundary, autoFold]);
   const openMode = deliverableOpenModeOf(useSyncExternalStore(
     props.openPrefs?.subscribe ?? ((fn: () => void) => { void fn; return () => {}; }),
     () => props.openPrefs?.getSnapshot()?.deliverableOpenMode,
@@ -505,7 +502,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinned
     || liveItems.some(item => item.kind === 'fold'
       ? item.key === key || item.steps.some(step => step.key === key || ('nodeKey' in step && step.nodeKey === key))
       : item.key === key || ('nodeKey' in item.step && item.step.nodeKey === key)));
-  const expanded = holdingSelection || processExpanded(expansionChoice, boundary);
+  const expanded = !autoFold || holdingSelection || processExpanded(expansionChoice, boundary);
   const [foldOpenByKey, setFoldOpenByKey] = useState<Record<string, boolean>>({});
   const deliverables = useMemo(() => getTurnDeliverables(turn, flow), [turn, flow]);
   const fileMentions = useMemo(
@@ -534,9 +531,9 @@ const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinned
     const captured = new Map(group.keys.flatMap(key => {
       const node = nodes.get(key); return node ? [[key, node] as const] : [];
     }));
-    return { items: holdingSelection ? presentForIntensity(steps, boundary, processOnly ? 2 : 0) : liveItems,
+    return { items: holdingSelection ? presentLiveTurn(steps, boundary, false) : liveItems,
       snapshot: { ...snapshot, nodes: { ...nodes, get: (key: string) => captured.get(key), values: () => [...captured.values()] } } };
-  }, [snapshot, nodes, group, steps, boundary, liveItems, holdingSelection, processOnly]);
+  }, [snapshot, nodes, group, steps, boundary, liveItems, holdingSelection]);
   const shared = {
     useChat: useFlowChat,
     renderSlotChain: props.renderSlotChain,
@@ -560,9 +557,9 @@ const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinned
   const showTerminalNotice = terminal && !hasTurnError
     && (stoppedWithoutAnswer || (boundary.reason !== 'interrupted' && boundary.reason !== 'aborted'));
   const renderStep = (step: LiveStep, folded: boolean) => {
-    const processOpen = folded || expanded || processOnly;
+    const processOpen = folded || expanded;
     if (step.kind === 'reasoning' || step.kind === 'body') return <BlockBoundary>
-      <AssistantNode {...shared} boundary={boundary} nodeKey={step.nodeKey} partStart={step.start} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} folded={folded} processOnly={processOnly} motion={motion} onRead={pinProcess} returnFocusTo={processButton} />
+      <AssistantNode {...shared} boundary={boundary} nodeKey={step.nodeKey} partStart={step.start} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} folded={folded} motion={motion} onRead={pinProcess} returnFocusTo={processButton} />
     </BlockBoundary>;
     if (step.kind === 'tool') return <BlockBoundary><ProcessFragment open={processOpen} motion={motion} onRead={pinProcess} returnFocusTo={processButton} nodeKey={step.key} framed>
       <ToolActivity {...shared} entry={step.entry} motion={motion} turnClosed={boundary.status === 'closed'} onRead={pinProcess} />
@@ -580,7 +577,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinned
       <Disclosure open={expanded} onChange={setExpanded} controls={flowId} buttonRef={processButton}
         label={<GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />} />
     </StickyLane>}
-    {boundary.status === 'closed' && hasProcess && !processOnly && <ClosedProcessSummary open={expanded} onChange={setExpanded} controls={flowId}
+    {boundary.status === 'closed' && hasProcess && autoFold && <ClosedProcessSummary open={expanded} onChange={setExpanded} controls={flowId}
       steps={steps.filter(step => {
         if (step.kind === 'user') return false;
         if (step.kind !== 'body') return true;
@@ -589,7 +586,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, foldIntensity, pinned
           || node.data.blocks.some(block => block.kind === 'tool-call')
           || (boundary.latestStep > 0 && node.data.step < boundary.latestStep));
       })} />}
-    <ChoreographedFlow id={flowId} frame={presentation} motion={motion} enabled={foldIntensity !== 0 && boundary.status === 'open' && !holdingSelection}
+    <ChoreographedFlow id={flowId} frame={presentation} motion={motion} enabled={autoFold && boundary.status === 'open' && !holdingSelection}
       urgent={hasTurnError || interaction !== undefined || !sessionRunning} open={foldOpenByKey} processOpen={expanded}
       onOpenChange={(key, value) => { pinProcess(); setFoldOpenByKey(current => ({ ...current, [key]: value })); }} renderStep={renderStep} />
     {/* 状态指示永远排在流程之后：AI 的响应永远出现在最新消息（含补充消息）的下方 */}
@@ -620,10 +617,11 @@ export function Reader(props: ReaderProps) {
   const motion = useMotionAllowed(motionPreference);
   const prefsSnap = useSyncExternalStore(
     props.openPrefs?.subscribe ?? ((fn: () => void) => { void fn; return () => {}; }),
-    () => props.openPrefs?.getSnapshot() ?? {},
-    () => ({}),
+    () => props.openPrefs?.getSnapshot?.(),
+    () => undefined,
   );
-  const foldIntensity = foldIntensityOf(prefsSnap);
+  const storeAutoFold = props.useStore(state => state.autoFold);
+  const autoFold = prefsSnap?.autoFold ?? (prefsSnap?.foldIntensity !== undefined ? prefsSnap.foldIntensity !== 0 : undefined) ?? storeAutoFold ?? true;
   const frostedGlass = frostedGlassOf(prefsSnap);
   const streamMotion = useMemo(() => ({ enabled: motion, activatedAt: activatedAt.current }), [motion]);
   const groups = useMemo(() => groupNodes(order, key => nodes.get(key)), [order, nodes, timeline]);
@@ -790,29 +788,22 @@ export function Reader(props: ReaderProps) {
 
   // ChatView publishes data-chat-flow="" on its column. Skins treat a
   // scrollport without that hook as inspect-only and hide [data-composer-seat].
-  return <StreamMotionContext.Provider value={streamMotion}><div ref={root} className={css.root} data-dsh-better-display="0.1.1" data-reader-wait-clock-version="input-v1" data-reader-wait-start={waitAnchor.time ?? undefined} data-motion={motion ? 'on' : 'off'} data-reader-glass={frostedGlass || undefined} data-reader-fold-intensity={foldIntensity}>
+  return <StreamMotionContext.Provider value={streamMotion}><div ref={root} className={css.root} data-dsh-better-display="0.1.1" data-reader-wait-clock-version="input-v1" data-reader-wait-start={waitAnchor.time ?? undefined} data-motion={motion ? 'on' : 'off'} data-reader-glass={frostedGlass || undefined} data-reader-auto-fold={autoFold ? 'on' : 'off'}>
     <TimelineRail items={timelineItems} activeTurn={activeTurn} busyTurn={busyTurn} onNavigate={onNavigateTurn} />
     <div className={css.column} data-chat-flow="">
       <StickyLane kind="toolbar" className={css.toolbar}>
-        <div className={css.foldControl} role="radiogroup" aria-label="过程折叠强度" data-reader-fold-control={foldIntensity}>
-          {([
-            [0, '不折叠', '全程展开思考、工具与正文，不做自动折叠。'],
-            [1, '标准折叠', '新思考出现时，按当前主线收起此前步骤。'],
-            [2, '过程摘要', '已结束的思考和工具收成一行摘要，正文永不折叠。'],
-          ] as const).map(([value, label, title]) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={foldIntensity === value}
-              className={css.foldStop}
-              data-on={foldIntensity === value || undefined}
-              data-reader-fold-stop={value}
-              title={title}
-              onClick={() => { props.openPrefs?.actions?.setFoldIntensity?.(value); }}
-            >{label}</button>
-          ))}
-        </div>
+        <button
+          type="button"
+          className={css.textButton}
+          aria-pressed={autoFold}
+          onClick={() => {
+            props.actions.setAutoFold(!autoFold);
+            props.openPrefs?.actions?.setAutoFold?.(!autoFold);
+          }}
+          title="新思考产生时，是否自动将此前步骤收拢为一行汇总。关闭后完整保留原始过程与流式输出。"
+        >
+          {`自动折叠${autoFold ? '开' : '关'}`}
+        </button>
       </StickyLane>
       {hasMore && <button type="button" className={css.historyButton} disabled={loadingOlder} onClick={async () => {
         setHistoryError(false);
@@ -821,7 +812,7 @@ export function Reader(props: ReaderProps) {
       {historyError && <div className={css.notice}>历史记录加载失败，可再次尝试；现有内容未改变。</div>}
       {openError && <div className={css.error} role="alert">会话暂时无法读取：{openError.message}</div>}
       {loading && groups.length === 0 && <p className={css.empty} role="status">正在读取会话…</p>}
-      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} foldIntensity={foldIntensity} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
+      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
       {visibleSubmissions.map(submission => {
         const images = pendingSubmissionImages(submission);
         return (

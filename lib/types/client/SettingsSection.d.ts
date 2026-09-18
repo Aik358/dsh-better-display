@@ -15,7 +15,8 @@ export interface OpenPrefs {
     actions: {
         setDeliverableOpenMode: (value: DeliverableOpenMode) => void;
         setFrostedGlass: (value: boolean) => void;
-        setFoldIntensity: (value: FoldIntensity) => void;
+        setFoldIntensity?: (value: FoldIntensity) => void;
+        setAutoFold?: (value: boolean) => void;
     };
 }
 export interface BetterDisplaySettingsInjected {

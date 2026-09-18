@@ -13,11 +13,18 @@ import css from './Reader.module.css';
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
-export class BlockBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
+export class BlockBoundary extends Component<{ children: ReactNode }, { failed: boolean; detail: string }> {
+  state = { failed: false, detail: '' };
+  // Temporary diagnostic: surface the reason inline so a recurrence is reportable
+  // without a console. Remove once the reported block crash is identified.
+  static getDerivedStateFromError(error: unknown) {
+    const err = error as { message?: unknown } | undefined;
+    return { failed: true, detail: String(err?.message ?? error).slice(0, 160) };
+  }
   render() {
-    return this.state.failed ? <div className={css.notice}>此内容暂时无法在阅读页显示；原对话中的记录未受影响。</div> : this.props.children;
+    return this.state.failed
+      ? <div className={css.notice}>此内容暂时无法在阅读页显示；原对话中的记录未受影响。<span data-reader-block-error style={{ opacity: .65 }}>（{this.state.detail}）</span></div>
+      : this.props.children;
   }
 }
 

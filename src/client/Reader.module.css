@@ -121,17 +121,16 @@
   font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; white-space: nowrap; }
 .diffAdded { color: var(--dsw-alias-state-success-primary, #2f9e63); }
 .diffRemoved { color: var(--dsw-alias-state-error-primary, #d1483c); }
-/* A digest row is [label][counts]; the counts sit to the right of the label and
-   open a per-file breakdown directly beneath themselves. A run that changed no
-   files renders nothing here, leaving ordinary process digests untouched. */
+/* A digest row is [label][counts]; the counts are pushed to the right edge so
+   every row's numbers line up in one column instead of drifting with the label. */
 .summaryRow { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; flex-wrap: wrap; }
-.summaryRow > .diffStatRoot { flex: none; }
+.summaryRow > .diffStatRoot { flex: none; margin-left: auto; }
 .summaryRow > :first-child { min-width: 0; }
 .diffStatRoot { position: relative; flex: none; }
 /* Transparent at rest like the path and count chips beside it; the outline and
    surface appear on hover or keyboard focus, so the row reads as text until the
    pointer says otherwise. */
-.diffStatButton { display: inline-flex; gap: 6px; align-items: center; padding: 1px 6px; cursor: pointer;
+.diffStatButton { display: inline-flex; gap: 6px; align-items: center; padding: 2px 8px; cursor: pointer;
   font: inherit; font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum"; color: var(--dsw-alias-label-secondary);
   background: transparent; border: 1px solid transparent; border-radius: 6px;
@@ -141,29 +140,88 @@
   background: var(--dsw-alias-bg-module-platform, rgba(127, 127, 127, .1));
   border-color: var(--dsw-alias-border-l2, rgba(127, 127, 127, .28)); }
 .diffStatButton:focus-visible { outline: none; }
-/* An in-flow card, never an absolutely positioned popup: the flow cell clips
-   with `overflow: clip`, so a floating panel anchored inside one would be cut
-   off entirely. In flow it also inherits the panel's own scrolling. */
-.diffPanel { width: 100%; max-width: 100%; padding: 6px;
-  display: flex; flex-direction: column; gap: 2px;
-  background: var(--dsw-alias-bg-module-platform);
-  border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; }
-/* The digest row's counts open the official diff surface below the summary line. */
-.diffOverlay { display: block; margin-top: 6px; }
-.diffStatRoot > .diffOverlay { position: static; display: block; overflow: hidden;
-  transform-origin: top center; will-change: height, opacity, transform; }
 .diffStatButton[aria-expanded="true"] .diffCaret { opacity: 1; }
-.diffTabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
-.diffTab { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  padding: 2px 8px; cursor: pointer; font: inherit; font-size: 11px; line-height: 16px;
-  color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-module-platform);
-  border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; }
-.diffTab[data-active] { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l1); }
-.diffFile { border-radius: 7px; overflow: hidden; }
-.diffFileRow { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 7px;
-  cursor: pointer; text-align: left; font: inherit; font-size: 12px; color: var(--dsw-alias-label-primary);
-  background: transparent; border: 0; border-radius: 7px; }
-.diffFileRow:hover { background: var(--dsw-alias-bg-module-platform); }
+
+/* The diff overlay spans the full column width below the summary row, never overflowing. */
+.diffOverlayRow {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.diffOverlay {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform, rgba(127, 127, 127, .08));
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, .22));
+  padding: 8px;
+}
+
+.diffTabs {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  max-width: 100%;
+  scrollbar-width: thin;
+}
+
+.diffTab {
+  flex: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-base, rgba(255, 255, 255, .8));
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, .2));
+  border-radius: 6px;
+  transition: all 120ms ease;
+}
+.diffTab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.diffTab[data-active] {
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-state-business-primary, #1e90ff);
+  background: var(--dsw-alias-bg-base);
+  font-weight: 500;
+}
+
+.diffScrollArea {
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, .15));
+  background: var(--dsw-alias-markdown-code-block, rgba(0, 0, 0, .04));
+}
+
+.diffScrollArea :global([data-diff]) {
+  margin: 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
 .diffCaret { flex: none; width: 10px; opacity: .6; font-size: 10px; }
 .diffPath { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   direction: rtl; text-align: left; }
@@ -451,7 +509,7 @@
 .flowCellInner:empty { padding-bottom: 0; }
 .choreographedFlow[data-reader-transition=collapse] .flowCell * { animation-play-state: paused !important; }
 .numberRollExit, .numberRollEnter { animation-duration: 160ms; }
-.foldSummary { flex-wrap: wrap; white-space: normal !important; }
+.foldSummary { display: inline-flex; align-items: baseline; flex-wrap: nowrap !important; white-space: nowrap !important; }
 /* A flex item's intrinsic width must include its real label and chevron.
    The previous shrink-to-fit + max-width chain clipped even four CJK glyphs. */
 .toolbar { width: 100%; max-width: 100%; align-self: stretch; box-sizing: border-box; min-height: 40px; z-index: 7; border-bottom: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -471,19 +529,24 @@
 .thinkSizer { white-space: normal; overflow-wrap: anywhere; }
 .thinkText { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
 
-/* Frosted glass is opt-in. Off keeps pre-#14 / current-main opaque chrome. */
+/* Skin mode is opt-in, and it has one job: some readers run a skinned host
+   (wallpaper / theme), and the reader's own opaque rows hide that skin. On =
+   every surface the reader paints becomes a thin token-derived wash and the
+   decorative chrome (border, 16px radius, floating shadow) is dropped, so the
+   skin stays visible across the whole reading view. Off keeps the pre-#14 /
+   current-main opaque chrome. */
 .root[data-reader-glass] .toolbar,
 .root[data-reader-glass] .turnProcessSticky,
 .root[data-reader-glass] .liveFoldContainer {
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 58%, transparent);
-  backdrop-filter: blur(28px) saturate(1.55);
-  -webkit-backdrop-filter: blur(28px) saturate(1.55);
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.35)) 65%, transparent);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.18);
+  background: transparent;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .root[data-reader-glass] .toolbar { z-index: 6; }
-.root[data-reader-glass] .turnProcessSticky { z-index: 5; margin-right: 8px; padding-inline: 12px; }
+.root[data-reader-glass] .turnProcessSticky { z-index: 5; }
 .root[data-reader-glass] .liveFoldContainer { z-index: 5; }
 .root[data-reader-glass] .flowCell[data-flow-summary],
 .root[data-reader-glass] .closedProcessSummary {
@@ -496,8 +559,17 @@
   padding-left: 10px;
   border-radius: 0;
 }
+/* User bubble becomes a sleek translucent frosted pill in skin mode */
+.root[data-reader-glass] .user {
+  background: color-mix(in srgb, var(--dsw-specific-bubble, rgba(0,0,0,.08)) 25%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.3)) 30%, transparent);
+}
+/* Skin mode paints no plates of the reader's own: cards, panels and frames go
+   fully transparent so the skin behind them stays visible. */
 .root[data-reader-glass] .reasonCard {
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 38%, transparent);
+  background: transparent;
   border-color: color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.35)) 65%, transparent);
 }
 .root[data-reader-glass] .toolDetails,
@@ -505,8 +577,42 @@
 .root[data-reader-glass] .unknown,
 .root[data-reader-glass] .toolRaw,
 .root[data-reader-glass] .systemPrompt,
-.root[data-reader-glass] .compactionSummaryBox {
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, rgba(255,255,255,.86)) 32%, transparent);
+.root[data-reader-glass] .compactionSummaryBox,
+.root[data-reader-glass] .attention,
+.root[data-reader-glass] .imageFrame,
+.root[data-reader-glass] .imageDialog {
+  background: transparent;
+}
+/* Diff overlay in skin mode */
+.root[data-reader-glass] .diffOverlay {
+  background: color-mix(in srgb, var(--dsw-alias-bg-module-platform, rgba(127,127,127,.1)) 20%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.root[data-reader-glass] .diffScrollArea {
+  background: transparent;
+}
+.root[data-reader-glass] .diffTab {
+  background: color-mix(in srgb, var(--dsw-alias-bg-base, rgba(255,255,255,.8)) 25%, transparent);
+}
+.root[data-reader-glass] .diffTab[data-active] {
+  background: color-mix(in srgb, var(--dsw-alias-bg-base, rgba(255,255,255,1)) 45%, transparent);
+}
+/* Code blocks translucent in skin mode */
+.root[data-reader-glass] :global(.md-code-block),
+.root[data-reader-glass] :global([data-diff]) {
+  background: color-mix(in srgb, var(--dsw-alias-markdown-code-block, rgba(0,0,0,.06)) 25%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l1, rgba(128,128,128,.2)) 30%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+/* The fold control rides a sticky row: it must not paint a plate of its own. */
+.root[data-reader-glass] .foldControl {
+  background: color-mix(in srgb, var(--dsw-alias-bg-module-platform, rgba(127,127,127,.1)) 25%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2, rgba(128,128,128,.2)) 30%, transparent);
+}
+.root[data-reader-glass] .foldStop[data-on] {
+  background: color-mix(in srgb, var(--dsw-alias-bg-base, rgba(255,255,255,1)) 35%, transparent);
 }
 .root[data-reader-glass] .compactionPill,
 .root[data-reader-glass] .deliverableChip,

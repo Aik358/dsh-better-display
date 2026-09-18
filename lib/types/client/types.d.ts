@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives';
@@ -44,6 +45,7 @@ export interface ReaderInjected {
         subscribe: (fn: () => void) => () => void;
         actions?: {
             setFoldIntensity?: (value: import('./fold-intensity.js').FoldIntensity) => void;
+            setAutoFold?: (value: boolean) => void;
             setFrostedGlass?: (value: boolean) => void;
             setDeliverableOpenMode?: (value: import('./open-file.js').DeliverableOpenMode) => void;
         };
@@ -54,9 +56,11 @@ export interface ReaderInjected {
     forkAt?: (seq: number) => void;
     /** Load session history through a target sequence number. */
     loadThrough?: (seq: unknown) => Promise<void>;
+    /** Resolve a custom tool view registered in the `tool.call.toolview` slot (e.g. diff cards). */
+    getToolView?: (toolName: string) => ComponentType<any> | null;
 }
 export type ReaderProps = PropsRuntime<'conversation.view'> & PropsLocale<'chat'> & PropsRenderSlots<'dsh-better-display.block'> & PropsStore<ReturnType<typeof createReaderStore>> & ReaderInjected;
-export type BlockRenderProps = Pick<ReaderProps, 'renderSlotChain' | 'loadImage' | 'fillComposer'> & {
+export type BlockRenderProps = Pick<ReaderProps, 'renderSlotChain' | 'loadImage' | 'fillComposer' | 'getToolView'> & {
     openFile?: (path: string) => Promise<void> | void;
     revealFile?: (path: string) => Promise<void> | void;
     forkAt?: (seq: number) => void;

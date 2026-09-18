@@ -19,7 +19,8 @@ export interface OpenPrefs {
   actions: {
     setDeliverableOpenMode: (value: DeliverableOpenMode) => void;
     setFrostedGlass: (value: boolean) => void;
-    setFoldIntensity: (value: FoldIntensity) => void;
+    setFoldIntensity?: (value: FoldIntensity) => void;
+    setAutoFold?: (value: boolean) => void;
   };
 }
 
@@ -63,7 +64,7 @@ export function SettingsSection(props: SettingsProps) {
   );
   const mode = deliverableOpenModeOf(snap.deliverableOpenMode);
   const glass = frostedGlassOf(snap);
-  const intensity = foldIntensityOf(snap);
+  const autoFold = snap.autoFold !== false && snap.foldIntensity !== 0;
   const setMode = (value: DeliverableOpenMode) => {
     props.prefs.actions.setDeliverableOpenMode(value);
   };
@@ -124,40 +125,21 @@ export function SettingsSection(props: SettingsProps) {
         />
       </div>
 
-      <div className={css.block} data-better-display-fold={intensity}>
-        <div className={css.title}>{text(props, copy, 'foldTitle')}</div>
-        <div className={css.desc}>{text(props, copy, 'foldDescription')}</div>
-        <div className={css.segment} role="radiogroup" aria-label={text(props, copy, 'foldTitle')}>
-          {FOLD_STOPS.map(stop => (
-            <button
-              key={stop.value}
-              type="button"
-              role="radio"
-              aria-checked={intensity === stop.value}
-              className={css.segmentStop}
-              data-on={intensity === stop.value || undefined}
-              data-better-display-fold-stop={stop.value}
-              onClick={() => { props.prefs.actions.setFoldIntensity(stop.value); }}
-            >
-              {text(props, copy, stop.key)}
-            </button>
-          ))}
+      <div className={css.row}>
+        <div className={css.rowText}>
+          <div className={css.title}>{text(props, copy, 'foldTitle')}</div>
+          <div className={css.desc}>{text(props, copy, 'foldDescription')}</div>
         </div>
-        <input
-          type="range"
-          className={css.slider}
-          min={0}
-          max={2}
-          step={1}
-          value={intensity}
-          aria-valuemin={0}
-          aria-valuemax={2}
-          aria-valuenow={intensity}
-          aria-valuetext={text(props, copy, FOLD_STOPS[intensity]?.key ?? 'foldStandard')}
-          data-better-display-fold-slider={intensity}
-          onChange={event => {
-            const next = Number(event.target.value);
-            if (next === 0 || next === 1 || next === 2) props.prefs.actions.setFoldIntensity(next);
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoFold}
+          className={css.switch}
+          data-on={autoFold || undefined}
+          data-better-display-auto-fold={autoFold ? 'on' : 'off'}
+          onClick={() => {
+            props.prefs.actions.setAutoFold?.(!autoFold);
+            props.prefs.actions.setFoldIntensity?.(!autoFold ? 1 : 0);
           }}
         />
       </div>

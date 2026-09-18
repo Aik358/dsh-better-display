@@ -7,12 +7,15 @@ export declare class BlockBoundary extends Component<{
     children: ReactNode;
 }, {
     failed: boolean;
+    detail: string;
 }> {
     state: {
         failed: boolean;
+        detail: string;
     };
-    static getDerivedStateFromError(): {
+    static getDerivedStateFromError(error: unknown): {
         failed: boolean;
+        detail: string;
     };
     render(): string | number | boolean | Iterable<ReactNode> | import("react").JSX.Element | null | undefined;
 }

@@ -10,7 +10,7 @@ import {
   frostedGlassOf,
   processOnlyFromIntensity,
 } from '../src/client/fold-intensity.ts';
-import { presentForIntensity } from '../src/client/live-turn.ts';
+import { presentLiveTurn } from '../src/client/live-turn.ts';
 import type { LiveStep } from '../src/client/live-turn.ts';
 import { en, zh } from '../src/client/settings-copy.ts';
 
@@ -57,32 +57,17 @@ test('fold slider maps 0/1/2 and migrates older persist flags', () => {
   assert.equal(processOnlyFromIntensity(2), true);
 });
 
-test('level 0 keeps every step open; level 1 is current-main fold-on-next-reasoning', () => {
+test('autoFold false keeps every step open; autoFold true is current-main fold-on-next-reasoning', () => {
   const steps = [reasoning(1), body, tool, reasoning(2)];
-  const none = presentForIntensity(steps, open, 0);
+  const none = presentLiveTurn(steps, open, false);
   assert.equal(none.some(item => item.kind === 'fold'), false);
   assert.deepEqual(none.map(item => item.key), ['r1', 'b1', 't1', 'r2']);
 
-  const standard = presentForIntensity(steps, open, 1);
+  const standard = presentLiveTurn(steps, open, true);
   assert.equal(standard[0]?.kind, 'fold');
   if (standard[0]?.kind !== 'fold') throw new Error('expected standard fold');
   assert.deepEqual(standard[0].steps.map(step => step.key), ['r1', 'b1', 't1']);
   assert.deepEqual(standard.filter(item => item.kind === 'open').map(item => item.key), ['r2']);
-});
-
-test('level 2 is process summary: body never folds, in-flight run stays open', () => {
-  const steps = [reasoning(1), tool, body, reasoning(2)];
-  const live = presentForIntensity(steps, open, 2);
-  const folds = live.filter(item => item.kind === 'fold');
-  assert.equal(folds.length, 1);
-  if (folds[0]?.kind !== 'fold') throw new Error('expected process digest');
-  assert.deepEqual(folds[0].steps.map(step => step.key), ['r1', 't1']);
-  assert.ok(folds[0].summary.includes('读取'));
-  assert.deepEqual(live.filter(item => item.kind === 'open').map(item => item.kind === 'open' ? item.step.kind : ''), ['body', 'reasoning']);
-
-  const finished = presentForIntensity(steps, closed, 2);
-  assert.equal(finished.filter(item => item.kind === 'fold').length, 2);
-  assert.equal(finished.some(item => item.kind === 'open' && item.step.kind === 'body'), true);
 });
 
 test('root reader store persists glass off and standard fold on dsh.reader.v1', () => {
@@ -96,16 +81,14 @@ test('root reader store persists glass off and standard fold on dsh.reader.v1', 
   assert.match(store, /setDeliverableOpenMode/);
 });
 
-test('settings copy names the three fold stops and glass without leaking home paths', () => {
+test('settings copy names fold switch and glass without leaking home paths', () => {
   for (const copy of [en, zh]) {
     assert.match(copy.glassTitle, /毛玻璃|Frosted glass/i);
     assert.match(copy.foldTitle, /折叠|fold/i);
-    assert.match(`${copy.foldNone}${copy.foldStandard}${copy.foldSummary}`, /不折叠|No fold/);
     assert.doesNotMatch(Object.values(copy).join('\n'), /\/Users\/|\$HOME\b/);
   }
   const reader = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
   assert.match(reader, /data-reader-glass=\{frostedGlass/);
-  assert.match(reader, /data-reader-fold-intensity=\{foldIntensity\}/);
-  assert.match(reader, /openPrefs\?\.actions\?\.setFoldIntensity/);
+  assert.match(reader, /data-reader-auto-fold=\{autoFold/);
   assert.doesNotMatch(reader, /setProcessOnly/);
 });

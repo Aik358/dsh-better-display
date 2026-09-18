@@ -20,7 +20,7 @@ import type { LiveStep } from './live-turn.js';
 function MorphPanel({ open, children, onSettled, onClosed }: {
   open: boolean; children: ReactNode; onSettled?: (element: HTMLElement) => void; onClosed: () => void;
 }) {
-  const ref = useRef<HTMLSpanElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
@@ -36,26 +36,26 @@ function MorphPanel({ open, children, onSettled, onClosed }: {
          { height: '0px', opacity: 0 }];
     const animation = element.animate(frames, {
       duration: FOLD_TIMING.reveal + FOLD_TIMING.settle,
-      easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both',
+      easing: 'cubic-bezier(.4,0,.2,1)',
     });
     let settled = false;
     const settle = () => {
       if (settled) return;
       settled = true;
       release();
-      if (open) onSettled?.(element);
-      else onClosed();
+      if (open) {
+        element.style.height = 'auto';
+        element.style.overflow = 'visible';
+        onSettled?.(element);
+      } else {
+        onClosed();
+      }
     };
     animation.onfinish = settle;
-    // `fill: 'both'` holds the opening keyframe (height 0, opacity 0) for as long as
-    // the animation is the thing driving the element. If it is cancelled — a re-run,
-    // an unmount, a subtree the compositor skips — onfinish never fires and the
-    // panel stays at zero height and zero opacity while sitting in the DOM, which
-    // reads as a badge that opens nothing. Commit the end state on a deadline too.
     const deadline = window.setTimeout(settle, FOLD_TIMING.reveal + FOLD_TIMING.settle + 240);
     return () => { window.clearTimeout(deadline); animation.cancel(); release(); };
   }, [open]);
-  return <span ref={ref} className={css.diffOverlay}>{children}</span>;
+  return <div ref={ref} className={css.diffOverlay}>{children}</div>;
 }
 
 /**
@@ -91,28 +91,34 @@ export function DiffStat({ steps, label }: { steps: readonly LiveStep[]; label: 
   const [active, setActive] = useState(0);
   if (!hunks.length) return null;
   const current = hunks[Math.min(active, hunks.length - 1)]!;
-  return <span className={css.diffStatRoot}>
-    <button type="button" className={css.diffStatButton} aria-expanded={open}
-      aria-label={`${label} · 改动 ${totals.added} 行，删除 ${totals.removed} 行`}
-      onClick={event => {
-        event.stopPropagation();
-        if (open) { setOpen(false); return; }
-        setVisible(true);
-        setOpen(true);
-      }}>
-      <span className={css.diffCaret} aria-hidden>{open ? '\u25be' : '\u25b8'}</span>
-      {totals.added > 0 && <span className={css.diffAdded}>+{totals.added}</span>}
-      {totals.removed > 0 && <span className={css.diffRemoved}>-{totals.removed}</span>}
-    </button>
-    {visible && <MorphPanel open={open} onSettled={revealPanel} onClosed={() => setVisible(false)}>
-      {hunks.length > 1 && <span className={css.diffTabs}>
-        {hunks.map((hunk, index) => <button key={`${hunk.path}:${index}`} type="button"
-          className={css.diffTab} data-active={index === active || undefined}
-          onClick={() => setActive(index)} title={hunk.path}>
-          {hunk.path.split(/[/\\]+/).filter(Boolean).slice(-1)[0] ?? hunk.path}
-        </button>)}
-      </span>}
-      <DiffBlock diffs={[current]} maxLines={24} labels={diffBlockLabels} />
-    </MorphPanel>}
-  </span>;
+  return <>
+    <span className={css.diffStatRoot}>
+      <button type="button" className={css.diffStatButton} aria-expanded={open}
+        aria-label={`${label} · 改动 ${totals.added} 行，删除 ${totals.removed} 行`}
+        onClick={event => {
+          event.stopPropagation();
+          if (open) { setOpen(false); return; }
+          setVisible(true);
+          setOpen(true);
+        }}>
+        <span className={css.diffCaret} aria-hidden>{open ? '\u25be' : '\u25b8'}</span>
+        {totals.added > 0 && <span className={css.diffAdded}>+{totals.added}</span>}
+        {totals.removed > 0 && <span className={css.diffRemoved}>-{totals.removed}</span>}
+      </button>
+    </span>
+    {visible && <div className={css.diffOverlayRow}>
+      <MorphPanel open={open} onSettled={revealPanel} onClosed={() => setVisible(false)}>
+        {hunks.length > 1 && <div className={css.diffTabs}>
+          {hunks.map((hunk, index) => <button key={`${hunk.path}:${index}`} type="button"
+            className={css.diffTab} data-active={index === active || undefined}
+            onClick={() => setActive(index)} title={hunk.path}>
+            {hunk.path.split(/[/\\]+/).filter(Boolean).slice(-1)[0] ?? hunk.path}
+          </button>)}
+        </div>}
+        <div className={css.diffScrollArea}>
+          <DiffBlock diffs={[current]} maxLines={36} labels={diffBlockLabels} />
+        </div>
+      </MorphPanel>
+    </div>}
+  </>;
 }

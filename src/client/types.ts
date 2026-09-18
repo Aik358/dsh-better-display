@@ -44,6 +44,7 @@ export interface ReaderInjected {
     subscribe: (fn: () => void) => () => void;
     actions?: {
       setFoldIntensity?: (value: import('./fold-intensity.js').FoldIntensity) => void;
+      setAutoFold?: (value: boolean) => void;
       setFrostedGlass?: (value: boolean) => void;
       setDeliverableOpenMode?: (value: import('./open-file.js').DeliverableOpenMode) => void;
     };
