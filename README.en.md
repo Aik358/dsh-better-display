@@ -2,11 +2,25 @@
 
 [中文](./README.md)
 
+Prefer npm (version-pinable):
+
+```sh
+dsh plugin --profile web add dsh-better-display@0.1.1
+```
+
+Or latest:
+
+```sh
+dsh plugin --profile web add dsh-better-display
+```
+
+Fallback: install from GitHub (tracks the default branch tip):
+
 ```sh
 dsh plugin --profile web add github:aa2246740/dsh-better-display
 ```
 
-You need official `dsh` (or `npx @deepseek-ai/dsh`) and **pnpm** on PATH. `dsh plugin add` runs pnpm in `$DSH_HOME/profiles/web`. This repo commits built `lib/`, so a git install does not need `prepare` or a profile `allowBuilds` entry.
+You need official `dsh` (or `npx @deepseek-ai/dsh`) and **pnpm** on PATH. `dsh plugin add` runs pnpm in `$DSH_HOME/profiles/web`. This repo commits built `lib/`, so git / npm installs do not need `prepare` or a profile `allowBuilds` entry.
 
 Then restart that Host and reload the page. `dsh plugin add` writes the profile. It does not hot-load a running process.
 
