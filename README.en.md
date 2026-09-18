@@ -5,7 +5,7 @@
 Prefer npm (version-pinable):
 
 ```sh
-dsh plugin --profile web add dsh-better-display@0.1.1
+dsh plugin --profile web add dsh-better-display@0.2.0
 ```
 
 Or latest:

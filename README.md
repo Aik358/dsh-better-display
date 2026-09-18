@@ -5,7 +5,7 @@
 推荐用 npm（可钉版本）：
 
 ```sh
-dsh plugin --profile web add dsh-better-display@0.1.1
+dsh plugin --profile web add dsh-better-display@0.2.0
 ```
 
 也可以装 latest：
