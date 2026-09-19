@@ -5,7 +5,7 @@
 Prefer npm (version-pinable):
 
 ```sh
-dsh plugin --profile web add dsh-better-display@0.2.0
+dsh plugin --profile web add dsh-better-display@0.2.1
 ```
 
 Or latest:
@@ -34,7 +34,7 @@ From a local checkout or tarball:
 
 ```sh
 dsh plugin --profile web add ./dsh-better-display
-dsh plugin --profile web add ./dsh-better-display-0.2.0.tgz
+dsh plugin --profile web add ./dsh-better-display-0.2.1.tgz
 ```
 
 `dsh.bundle` is captured at Host boot. Do not also insert the same row by hand in the profile `cordis.patch.yml`, or it will mount twice.

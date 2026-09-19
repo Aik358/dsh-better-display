@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.1 — 2026-09-20
+
+### Fixed
+
+- Pinned reader lanes no longer paint over the composer. The live status row
+  (`执行过程` / `正在使用工具`) pinned at the scrollport top with `z-index: 8`,
+  while the host's sticky composer seat owns `z-index: 7` and nothing between
+  the reader and `<body>` creates a stacking context. A scrolling reader clamps
+  every turn-level sticky lane down into the footer band — the lane stops at its
+  containing block's bottom, which passes behind the input card — so the reader
+  painted its own opaque plate over the composer.
+  - The live status lane now owns the measured lane under the toolbar, exactly
+    like the closed summary rows, instead of sharing the toolbar's lane.
+  - Lanes a scroll can clamp into the footer band stay below the composer seat
+    (`z-index` 6); only the top toolbar lane keeps 7, which also keeps it above
+    the host's code-block banners.
+  - Skin mode no longer carries a second lane ladder of its own.
+  - `tests/footer-precedence.test.ts` guards the ladder in the source sheet and
+    in the committed bundle.
+
 ## 0.2.0 — 2026-09-18
 
 ### Diff review and tool presentation
