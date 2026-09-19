@@ -9,6 +9,8 @@ export type SettingsCopyKey =
   | 'foldNone'
   | 'foldStandard'
   | 'foldSummary'
+  | 'keepProseTitle'
+  | 'keepProseDescription'
   | 'skillTitle'
   | 'skillInstalled'
   | 'skillMissing'
@@ -32,6 +34,8 @@ export const en: SettingsCopy = {
   foldNone: 'Off',
   foldStandard: 'On',
   foldSummary: 'Summary',
+  keepProseTitle: 'Keep model replies visible when folding',
+  keepProseDescription: 'Off by default. When on, a fold collects only process steps — tool calls, their output and thinking — while the text the model writes to you always stays open. A run of a single step is left expanded, so a lone tool row keeps its name and target. Independent of the fold control above; works at every fold level.',
   skillTitle: 'generative-mcpapps skill',
   skillInstalled: 'Installed',
   skillMissing: 'Not detected',
@@ -54,6 +58,8 @@ export const zh: SettingsCopy = {
   foldNone: '关闭',
   foldStandard: '开启',
   foldSummary: '摘要',
+  keepProseTitle: '折叠时保留模型回复',
+  keepProseDescription: '默认关闭。开启后，折叠只收纳过程步骤——工具调用、其输出与思维链——而模型写给读者的正文始终展开。只有一步的过程不会被折成摘要，单独一行工具仍保留名称与目标。与上方的折叠档位相互独立，各档位均可生效。',
   skillTitle: 'generative-mcpapps 技能',
   skillInstalled: '已安装',
   skillMissing: '未检测到',

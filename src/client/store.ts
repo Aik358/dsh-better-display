@@ -4,6 +4,7 @@ import {
   FOLD_INTENSITY_DEFAULT,
   autoFoldFromIntensity,
   processOnlyFromIntensity,
+  keepProseOf,
   type FoldIntensity,
 } from './fold-intensity.js';
 import type { DeliverableOpenMode } from './open-file.js';
@@ -22,6 +23,11 @@ export interface ReaderState {
   foldIntensity: FoldIntensity;
   /** Translucent frosted chrome. Default off so opaque main chrome stays. */
   frostedGlass: boolean;
+  /**
+   * Keep the model's user-facing answer text out of the fold. Orthogonal to
+   * foldIntensity, which only decides how much process to fold. Default off.
+   */
+  keepProse: boolean;
   /** Derived from foldIntensity === 2; kept for older #14 snapshots. */
   processOnly: boolean;
 }
@@ -32,6 +38,7 @@ type ReaderActions = {
   setDeliverableOpenMode: (draft: ReaderState, value: DeliverableOpenMode) => void;
   setFoldIntensity: (draft: ReaderState, value: FoldIntensity) => void;
   setFrostedGlass: (draft: ReaderState, value: boolean) => void;
+  setKeepProse: (draft: ReaderState, value: boolean) => void;
 };
 
 function applyFoldIntensity(draft: ReaderState, value: FoldIntensity): void {
@@ -49,6 +56,7 @@ export function createReaderStore(): EngineStoreHandle<ReaderState, ReaderAction
       deliverableOpenMode: 'external',
       foldIntensity: FOLD_INTENSITY_DEFAULT,
       frostedGlass: false,
+      keepProse: keepProseOf(undefined),
       processOnly: false,
     }),
     persist: 'dsh.reader.v1',
@@ -63,6 +71,7 @@ export function createReaderStore(): EngineStoreHandle<ReaderState, ReaderAction
       setDeliverableOpenMode: (draft, value: DeliverableOpenMode) => { draft.deliverableOpenMode = value; },
       setFoldIntensity: (draft, value: FoldIntensity) => { applyFoldIntensity(draft, value); },
       setFrostedGlass: (draft, value: boolean) => { draft.frostedGlass = value; },
+      setKeepProse: (draft, value: boolean) => { draft.keepProse = value; },
     },
   });
 }

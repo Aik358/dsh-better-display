@@ -40,6 +40,45 @@ export function foldSummary(steps: readonly LiveStep[]): string {
   return parts.join(' · ') || '此前步骤';
 }
 
+export type ChainSegment = { fold: readonly LiveStep[] | null; open: readonly LiveStep[] };
+
+/**
+ * Keep-prose split: fold each *finished* run of process steps while every body
+ * step — the model's user-facing answer text — stays open.
+ *
+ * A run is folded only once a body step follows it, so the run that is still
+ * streaming stays expanded exactly as the reader is watching it.
+ *
+ * Runs of a single step are left open on purpose. One tool row already reads as
+ * one line, and that line carries the tool name and its target; replacing it
+ * with a count would drop the only part of it a reader can act on.
+ */
+export function splitChainKeepingBody(chain: readonly LiveStep[]): ChainSegment[] {
+  const segments: ChainSegment[] = [];
+  let run: LiveStep[] = [];
+  const flushRun = (finished: boolean) => {
+    if (!run.length) return;
+    // Only a finished run of two or more steps is worth a summary.
+    if (finished && run.length > 1) segments.push({ fold: run, open: [] });
+    else segments.push({ fold: null, open: run });
+    run = [];
+  };
+  for (const step of chain) {
+    if (step.kind === 'body') {
+      flushRun(true);
+      segments.push({ fold: null, open: [step] });
+    } else if (step.kind === 'user') {
+      flushRun(false);
+      segments.push({ fold: null, open: [step] });
+    } else {
+      run.push(step);
+    }
+  }
+  // The trailing run is still live: never fold what the reader is watching.
+  flushRun(false);
+  return segments;
+}
+
 /** One chain: fold only when a new reasoning step has prior body/tool/reasoning. */
 export function splitChain(chain: readonly LiveStep[]): { fold: readonly LiveStep[] | null; open: readonly LiveStep[] } {
   const lastReasoning = chain.findLastIndex(step => step.kind === 'reasoning');
@@ -167,14 +206,33 @@ function toolSummary(entry: ToolActivityEntry): string {
   }
 }
 
-export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold = true): LiveTurnItem[] {
+export function presentLiveTurn(
+  steps: readonly LiveStep[],
+  boundary: TurnBoundary,
+  autoFold = true,
+  keepProse = false,
+): LiveTurnItem[] {
   const live = autoFold && liveFoldEnabled(boundary);
   const items: LiveTurnItem[] = [];
   let chain: LiveStep[] = [];
+  const pushSegment = (segment: ChainSegment, fallbackKey: string) => {
+    if (segment.fold?.length) {
+      items.push({ kind: 'fold', key: `live-fold:${segment.fold[0]!.key ?? fallbackKey}`, steps: segment.fold, summary: foldSummary(segment.fold) });
+    }
+    for (const step of segment.open) items.push({ kind: 'open', key: step.key, step });
+  };
   const flush = () => {
     if (!chain.length) return;
     if (!live) {
       for (const step of chain) items.push({ kind: 'open', key: step.key, step });
+      chain = [];
+      return;
+    }
+    if (keepProse) {
+      // Fold process runs, never the model's user-facing text. See the issue:
+      // a reader who does not expand the fold cannot tell whether an
+      // explanation was hidden inside it.
+      for (const segment of splitChainKeepingBody(chain)) pushSegment(segment, chain[0]!.key);
       chain = [];
       return;
     }

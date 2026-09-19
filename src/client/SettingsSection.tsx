@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { foldIntensityOf, frostedGlassOf, type FoldIntensity } from './fold-intensity.js';
+import { foldIntensityOf, frostedGlassOf, keepProseOf, type FoldIntensity } from './fold-intensity.js';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
 import { settingsCopyFor, type SettingsCopy, type SettingsCopyKey } from './settings-copy.js';
 import { CONVENTIONAL_SKILL_ROOTS, detectGenerativeMcpappsSkill, shortestInstallCommand, type SkillStatusProbe, type SkillStatusSnapshot } from './skill-status.js';
@@ -11,6 +11,7 @@ export interface ReaderPrefsSnapshot {
   foldIntensity?: FoldIntensity;
   autoFold?: boolean;
   processOnly?: boolean;
+  keepProse?: boolean;
 }
 
 export interface OpenPrefs {
@@ -20,6 +21,7 @@ export interface OpenPrefs {
     setDeliverableOpenMode: (value: DeliverableOpenMode) => void;
     setFrostedGlass: (value: boolean) => void;
     setFoldIntensity?: (value: FoldIntensity) => void;
+    setKeepProse?: (value: boolean) => void;
     setAutoFold?: (value: boolean) => void;
   };
 }
@@ -64,6 +66,7 @@ export function SettingsSection(props: SettingsProps) {
   );
   const mode = deliverableOpenModeOf(snap.deliverableOpenMode);
   const glass = frostedGlassOf(snap);
+  const keepProse = keepProseOf(snap);
   const autoFold = snap.autoFold !== false && snap.foldIntensity !== 0;
   const setMode = (value: DeliverableOpenMode) => {
     props.prefs.actions.setDeliverableOpenMode(value);
@@ -141,6 +144,22 @@ export function SettingsSection(props: SettingsProps) {
             props.prefs.actions.setAutoFold?.(!autoFold);
             props.prefs.actions.setFoldIntensity?.(!autoFold ? 1 : 0);
           }}
+        />
+      </div>
+
+      <div className={css.row}>
+        <div className={css.rowText}>
+          <div className={css.title}>{text(props, copy, 'keepProseTitle')}</div>
+          <div className={css.desc}>{text(props, copy, 'keepProseDescription')}</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={keepProse}
+          className={css.switch}
+          data-on={keepProse || undefined}
+          data-better-display-keep-prose={keepProse ? 'on' : 'off'}
+          onClick={() => { props.prefs.actions.setKeepProse?.(!keepProse); }}
         />
       </div>
 
