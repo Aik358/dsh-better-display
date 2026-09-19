@@ -10,9 +10,11 @@
   container-type: inline-size;
 }
 .column { max-width: var(--dsh-chat-content-width, 748px); width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-.toolbar { position: sticky; top: 0; z-index: 6; display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 32px; padding: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-/* 吸顶带第一车道：左「正在处理」+ 右「自动折叠」共享同一 32px 水平基线 */
-.turnProcessSticky { position: sticky; top: 0; z-index: 5; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); min-height: 32px; display: flex; align-items: center; }
+.toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 32px; padding: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+/* 吸顶带第二车道：左「正在处理」+ 右「自动折叠」共享同一条 40px 水平基线。
+   top / z-index 由下方 measured-flow 段统一定义：这一道永远钉在工具栏车道
+   之下、且永远低于宿主输入卡（composerSeat z-index 7）。 */
+.turnProcessSticky { position: sticky; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); min-height: 32px; display: flex; align-items: center; }
 .turnProcessSticky .disclosureButton { min-height: 32px; }
 /* 第二车道：折叠胶囊吸附在第一车道正下方，互不重叠 */
 .textButton, .historyButton, .iconButton, .jump, .disclosureButton, .imageOpen, .dialogClose { font: inherit; cursor: pointer; }
@@ -463,7 +465,7 @@
 .morphDrawer { overflow: hidden; height: 0; transform-origin: top center; will-change: height, opacity, transform; }
 .liveFoldImpact { animation: liveFoldElastic 180ms cubic-bezier(0.2, 0, 0, 1) both; }
 @keyframes liveFoldElastic { 0% { transform: scale(1); } 50% { transform: scale(1.015); } 100% { transform: scale(1); } }
-.liveFoldContainer { position: sticky; top: 32px; z-index: 8; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 4px 0; margin-bottom: 6px; animation: liveFoldPulse 320ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: left center; will-change: transform, opacity; }
+.liveFoldContainer { position: sticky; top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); z-index: 6; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 4px 0; margin-bottom: 6px; animation: liveFoldPulse 320ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: left center; will-change: transform, opacity; }
 @keyframes liveFoldPulse { 0% { transform: translateY(-4px) scale(0.98); opacity: 0.8; } 50% { transform: translateY(0) scale(1.02); opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
 [data-motion=off] .liveFoldContainer { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .liveFoldContainer { animation: none !important; } }
@@ -512,8 +514,15 @@
 .foldSummary { display: inline-flex; align-items: baseline; flex-wrap: nowrap !important; white-space: nowrap !important; }
 /* A flex item's intrinsic width must include its real label and chevron.
    The previous shrink-to-fit + max-width chain clipped even four CJK glyphs. */
+/* Footer precedence (host ConversationRoot): the sticky composer seat owns
+   z-index 7, its own sticky code banner is 6 and the floating controls are 8.
+   Every reader lane a scroll can clamp down into the footer band must stay
+   strictly below 7, otherwise the reader paints its own opaque plate over the
+   input card. Only the top toolbar lane may use 7: it pins to the scrollport's
+   first lane and its containing block always ends above the seat, so it can
+   never reach the band, and 7 keeps it above the host's code-block banners. */
 .toolbar { width: 100%; max-width: 100%; align-self: stretch; box-sizing: border-box; min-height: 40px; z-index: 7; border-bottom: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.turnProcessSticky { box-sizing: border-box; width: calc(100% - var(--reader-control-width, 148px)); min-height: 40px; padding-right: 0; z-index: 8; border-bottom: 1px solid transparent; background-clip: padding-box; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.turnProcessSticky { box-sizing: border-box; width: calc(100% - var(--reader-control-width, 148px)); top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); min-height: 40px; padding-right: 0; z-index: 6; border-bottom: 1px solid transparent; background-clip: padding-box; backdrop-filter: none; -webkit-backdrop-filter: none; }
 /* The same summary row stays in flow until it reaches the measured top lane. */
 .flowCell[data-flow-summary], .closedProcessSummary { position: sticky; top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); z-index: 6; overflow: visible; box-sizing: border-box; min-height: 40px; padding-block: 4px; background: var(--dsw-alias-bg-base); border-bottom: 0; }
 .foldControl { display: inline-flex; align-items: center; gap: 0; padding: 2px; border-radius: 8px; background: var(--dsw-alias-bg-module-platform); }
@@ -545,9 +554,8 @@
   border-radius: 0;
   box-shadow: none;
 }
-.root[data-reader-glass] .toolbar { z-index: 6; }
-.root[data-reader-glass] .turnProcessSticky { z-index: 5; }
-.root[data-reader-glass] .liveFoldContainer { z-index: 5; }
+/* The z-index ladder is mode-independent: skin mode only drops the plate, so
+   a glass reader keeps exactly the same footer precedence as an opaque one. */
 .root[data-reader-glass] .flowCell[data-flow-summary],
 .root[data-reader-glass] .closedProcessSummary {
   position: static;
