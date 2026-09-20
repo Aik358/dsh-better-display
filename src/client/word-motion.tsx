@@ -2,6 +2,7 @@ import { createContext, useContext, useLayoutEffect, useMemo, useRef } from 'rea
 import type { ReactNode, RefObject } from 'react';
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives';
 import { MarkdownText } from './markdown/MarkdownText.js';
+import { readerPathImages } from './platform-media.js';
 import { WORD_MOTION, WordTimeline } from './word-timeline.js';
 import css from './Reader.module.css';
 
@@ -86,6 +87,6 @@ export function MotionMarkdown({ text, streaming, enabled, revision, fileMention
     return current.hasLiveText ? <MotionAtom born={current.bornAt(offset)} generation={current.generation} offset={offset}>{children}</MotionAtom> : children;
   }, []);
   return <WordScope.Provider value={scope}>
-    <MarkdownText text={text} streaming={streaming} codeLabels={CODE_LABELS} fileMentions={fileMentions} renderText={renderText} renderAtom={renderAtom} />
+    <MarkdownText text={text} streaming={streaming} codeLabels={CODE_LABELS} fileMentions={fileMentions} pathImages={readerPathImages} renderText={renderText} renderAtom={renderAtom} />
   </WordScope.Provider>;
 }

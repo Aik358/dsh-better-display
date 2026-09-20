@@ -14,6 +14,7 @@
 
 import { memo, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
+import type { MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IncrementalMarkdownParser } from './incremental.js'
 import { parseGfm, parseGfmWithMath } from './parse.js'
 import {
@@ -31,6 +32,7 @@ function renderSettled(
   text: string,
   codeLabels: MarkdownCodeLabels | undefined,
   fileMentions: MarkdownFileMentions | undefined,
+  pathImages: MarkdownPathImages | undefined,
   renderText: MarkdownRenderContext['renderText'],
   renderAtom: MarkdownRenderContext['renderAtom'],
 ): ReactNode[] {
@@ -43,6 +45,7 @@ function renderSettled(
     streaming: false,
     codeLabels,
     fileMentions,
+    pathImages,
     targets,
     footnoteOrder: [],
     footnoteCounts: new Map(),
@@ -73,7 +76,7 @@ class StreamingRenderer {
   private lastRendered: ReactNode[] = []
 
   /** @param codeLabels - Fence copy labels baked into cached elements; the owner replaces the renderer when they change. */
-  constructor(private readonly codeLabels: MarkdownCodeLabels | undefined, private readonly renderText: MarkdownRenderContext['renderText'], private readonly renderAtom: MarkdownRenderContext['renderAtom']) {}
+  constructor(private readonly codeLabels: MarkdownCodeLabels | undefined, private readonly renderText: MarkdownRenderContext['renderText'], private readonly renderAtom: MarkdownRenderContext['renderAtom'], private readonly pathImages: MarkdownPathImages | undefined) {}
 
   /**
    * Render the current accumulated text. Idempotent per text value, so React
@@ -109,6 +112,7 @@ class StreamingRenderer {
         streaming: true,
         codeLabels: this.codeLabels,
         fileMentions: undefined,
+        pathImages: this.pathImages,
         targets: frameTargets,
         footnoteOrder: this.frozenFootnoteOrder,
         footnoteCounts: this.frozenFootnoteCounts,
@@ -129,6 +133,7 @@ class StreamingRenderer {
       streaming: true,
       codeLabels: this.codeLabels,
       fileMentions: undefined,
+        pathImages: this.pathImages,
       targets: frameTargets,
       footnoteOrder: [...this.frozenFootnoteOrder],
       footnoteCounts: new Map(this.frozenFootnoteCounts),
@@ -162,26 +167,29 @@ class StreamingRenderer {
  * relative links, and unsafe protocols are disabled, while absolute HTTP(S)
  * images render directly.
  */
-export const MarkdownText = memo(function MarkdownText({ text, streaming = false, codeLabels, fileMentions, renderText, renderAtom }: {
+export const MarkdownText = memo(function MarkdownText({ text, streaming = false, codeLabels, fileMentions, pathImages, renderText, renderAtom }: {
   text: string
   streaming?: boolean
   codeLabels?: MarkdownCodeLabels | undefined
   fileMentions?: MarkdownFileMentions | undefined
+  pathImages?: MarkdownPathImages | undefined
   renderText?: MarkdownRenderContext['renderText']
   renderAtom?: MarkdownRenderContext['renderAtom']
 }) {
   const streamRef = useRef<StreamingRenderer | null>(null)
+  const streamImagesRef = useRef(pathImages)
   const streamLabelsRef = useRef<MarkdownCodeLabels | undefined>(codeLabels)
   const children = useMemo(() => {
     if (!streaming) {
       streamRef.current = null
-      return renderSettled(text, codeLabels, fileMentions, renderText, renderAtom)
+      return renderSettled(text, codeLabels, fileMentions, pathImages, renderText, renderAtom)
     }
-    if (streamRef.current === null || streamLabelsRef.current !== codeLabels) {
-      streamRef.current = new StreamingRenderer(codeLabels, renderText, renderAtom)
+    if (streamRef.current === null || streamLabelsRef.current !== codeLabels || streamImagesRef.current !== pathImages) {
+      streamRef.current = new StreamingRenderer(codeLabels, renderText, renderAtom, pathImages)
       streamLabelsRef.current = codeLabels
+      streamImagesRef.current = pathImages
     }
     return streamRef.current.render(text)
-  }, [text, streaming, codeLabels, fileMentions, renderText, renderAtom])
+  }, [text, streaming, codeLabels, fileMentions, pathImages, renderText, renderAtom])
   return <div className={css.markdown}>{children}</div>
 })

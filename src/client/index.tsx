@@ -13,6 +13,8 @@ import { installBetterDisplaySettings } from './settings.js';
 import { fillComposerDom } from './mcp-app.js';
 import { fileAddressFor, modeFromSnapshot, openDeliverableFile } from './open-file.js';
 import type { ReaderInjected } from './types.js';
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
+import { installOfficialSlots, officialChildren, type CompositionRegistry } from './official-slots.js';
 
 /** Structural face of the sanctioned per-session composer writer. */
 interface ComposerShell {
@@ -51,7 +53,7 @@ async function openWorkspacePath(
 export type { ReaderBlockOwner } from './types.js';
 export { McpAppFrame } from './McpAppFrame.js';
 export const name = 'dsh-better-display-client';
-export const inject = ['slots', 'sessions', 'conversation', 'remote', 'remote.session'];
+export const inject = ['slots', 'sessions', 'conversation', 'uiConversation', 'remote', 'remote.session'];
 
 export function apply(ctx: Context): void {
   const store = createReaderStore();
@@ -60,14 +62,17 @@ export function apply(ctx: Context): void {
   // intensity, and open-mode on the unsuffixed `dsh.reader.v1` key.
   const prefs = store.create();
   installBetterDisplaySettings(ctx, prefs);
-  ctx.slots.inject('conversation.view', function* () {
+  ctx.slots.inject('conversation.chat.node', function* () {
     yield ctx.slots.register({
     name: 'conversation.view',
     id: 'reader',
     order: -5,
     label: () => '阅读',
     locale: 'chat',
-    children: { 'dsh-better-display.block': { kind: 'chain', scope: 'session' } },
+    children: {
+      'dsh-better-display.block': { kind: 'chain', scope: 'session' },
+      ...officialChildren(ctx.slots as unknown as CompositionRegistry),
+    },
     store,
     inject: (sessionId: SessionId): ReaderInjected => {
       const session = () => {
@@ -77,13 +82,28 @@ export function apply(ctx: Context): void {
       };
       return {
         openPrefs: prefs,
+        officialImageLoader: Object.assign(
+          (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),
+          { peek: (attachment: ImageAttachmentRef) => ctx.uiConversation.peekImageUrl(sessionId, attachment) },
+        ),
+        officialFileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner, sessionId),
+        officialPreviewFile: path => {
+          const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd;
+          const sidebar = ctx.get('sidebarRight') as SidebarRightFace | undefined;
+          if (!sidebar?.openResource) throw new Error('文件预览面板不可用。');
+          sidebar.openResource((officialFileAddressFor ?? fileAddressFor)(sessionId, cwd, path));
+        },
+        officialHost: {
+          getSnapshot: () => ctx.remote.$host,
+          subscribe: listener => ctx.on('connection/reset', listener),
+        },
         loadOlder: async () => { await session().loadOlder(); },
         loadImage: async attachment => {
           const receipt = await session().readAttachment(attachment.attachmentId);
           if (!receipt.ok) throw new Error(receipt.error.message);
           return { data: Uint8Array.from(receipt.value.data), mediaType: receipt.value.attachment.mediaType };
         },
-        openFile: async (path: string) => {
+        openFile: async (path, options) => {
           try {
             const cwd = ctx.sessions?.list?.getSnapshot?.()?.byId[sessionId]?.cwd;
             const sidebar = (
@@ -98,7 +118,7 @@ export function apply(ctx: Context): void {
               resolveWorkspacePath,
               openExternal: async (absolutePath) => { await openWorkspacePath(ctx, absolutePath); },
               openSidebar: typeof sidebar?.openResource === 'function'
-                ? (address) => { sidebar.openResource!(address); }
+                ? (address) => { sidebar.openResource!(address, options?.line === undefined ? undefined : { params: { line: options.line } }); }
                 : undefined,
               fileAddressFor: officialFileAddressFor ?? fileAddressFor,
               warn: (message, extra) => { console.warn(message, extra); },
@@ -190,35 +210,11 @@ export function apply(ctx: Context): void {
             return false;
           }
         },
-        getToolView: (toolName: string) => {
-          try {
-            const slotsService = ctx.slots as unknown as { entriesOfSlot?: (name: string) => unknown[] };
-            const entries = slotsService?.entriesOfSlot?.('tool.call.toolview') ?? [];
-            const matches = entries.filter((e: any) => {
-              const key = e?.options?.key ?? e?.key;
-              const comp = e?.component ?? e?.view ?? e?.render ?? (typeof e === 'function' ? e : null);
-              return key === toolName && typeof comp === 'function';
-            });
-            if (matches.length === 0) return null;
-            matches.sort((a: any, b: any) => {
-              const prioA = a?.options?.priority ?? a?.priority ?? 0;
-              const prioB = b?.options?.priority ?? b?.priority ?? 0;
-              return prioA - prioB;
-            });
-            const best = matches[0] as any;
-            const prio = best?.options?.priority ?? best?.priority ?? 0;
-            const comp = best?.component ?? best?.view ?? best?.render ?? (typeof best === 'function' ? best : null);
-            if (prio < 0 || (toolName !== 'edit' && toolName !== 'write')) {
-              return comp;
-            }
-            return null;
-          } catch {
-            return null;
-          }
-        },
+
       };
     },
     }, Reader);
+    yield installOfficialSlots(ctx);
     yield installReaderEntry(ctx);
   });
 }

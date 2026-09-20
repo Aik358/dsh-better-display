@@ -126,9 +126,6 @@ export function ProcessFragment({ open, motion, onRead, returnFocusTo, nodeKey, 
       setPresent(open);
       return;
     }
-    if (from > target && motion) {
-      document.body.dataset.readerFolding = 'true';
-    }
     const animation = element.animate(
       from > target
         ? [
@@ -149,7 +146,6 @@ export function ProcessFragment({ open, motion, onRead, returnFocusTo, nodeKey, 
       if (settled) return;
       settled = true;
       if (running.current === animation) running.current = null;
-      delete document.body.dataset.readerFolding;
       animation.cancel();
       setPresent(open);
     };
@@ -164,7 +160,6 @@ export function ProcessFragment({ open, motion, onRead, returnFocusTo, nodeKey, 
     return () => {
       window.clearTimeout(deadline);
       running.current?.cancel();
-      delete document.body.dataset.readerFolding;
     };
   }, [open, motion, returnFocusTo]);
   if (!open && !present) return null;

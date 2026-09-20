@@ -35,10 +35,11 @@ export declare const Blocks: import("react").MemoExoticComponent<({ blocks, stre
     source?: ReaderBlockOwner["source"];
     holdFormatting?: boolean;
 }) => import("react").JSX.Element>;
-export declare function CopyAnswer({ blocks, onFork, metrics }: {
+export declare function CopyAnswer({ blocks, onFork, metrics, extraActions }: {
     blocks: readonly AssistantBlock[];
     onFork?: () => void;
     metrics?: BlockRenderProps['metrics'];
+    extraActions?: ReactNode;
 }): import("react").JSX.Element | null;
 export declare function UserMessageActions({ text, time }: {
     text: string;

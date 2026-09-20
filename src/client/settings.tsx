@@ -38,7 +38,7 @@ function createSkillProbe(ctx: Context): SkillStatusProbe {
       return await res.json() as HostSkillStatus;
     },
     listRemoteSkills: async () => {
-      const remote = ctx.remote as { skills?: RemoteSkillsFace } | undefined;
+      const remote = ctx.remote as unknown as { skills?: RemoteSkillsFace } | undefined;
       const skills = remote?.skills
         ?? (ctx.get?.('remote.skills') as RemoteSkillsFace | undefined)
         ?? ((ctx.get?.('remote') as { skills?: RemoteSkillsFace } | undefined)?.skills);

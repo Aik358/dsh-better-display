@@ -1,9 +1,10 @@
-import type { ComponentType } from 'react';
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
-import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type { AssistantBlock, MessageImageLoader } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
 import type { createReaderStore } from './store.js';
+import type { OfficialSeat } from './official-slots.js';
+import type { OpenFileOptions, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client';
 export interface ReaderBlockOwner {
     block: AssistantBlock;
     streaming: boolean;
@@ -32,7 +33,16 @@ export interface ReaderInjected {
      */
     fillComposer: (text: string) => boolean;
     /** Open a workspace file or directory; mode comes from the Better Display setting. */
-    openFile: (path: string) => Promise<void> | void;
+    openFile: (path: string, options?: OpenFileOptions) => Promise<void> | void;
+    officialImageLoader: MessageImageLoader;
+    officialFileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined;
+    officialPreviewFile: (path: string) => void;
+    officialHost: {
+        getSnapshot: () => {
+            home?: string;
+        };
+        subscribe: (listener: () => void) => () => void;
+    };
     /** Root-scoped Better Display prefs (`dsh.reader.v1`), shared with Settings. */
     openPrefs?: {
         getSnapshot: () => {
@@ -56,12 +66,12 @@ export interface ReaderInjected {
     forkAt?: (seq: number) => void;
     /** Load session history through a target sequence number. */
     loadThrough?: (seq: unknown) => Promise<void>;
-    /** Resolve a custom tool view registered in the `tool.call.toolview` slot (e.g. diff cards). */
-    getToolView?: (toolName: string) => ComponentType<any> | null;
 }
-export type ReaderProps = PropsRuntime<'conversation.view'> & PropsLocale<'chat'> & PropsRenderSlots<'dsh-better-display.block'> & PropsStore<ReturnType<typeof createReaderStore>> & ReaderInjected;
-export type BlockRenderProps = Pick<ReaderProps, 'renderSlotChain' | 'loadImage' | 'fillComposer' | 'getToolView'> & {
-    openFile?: (path: string) => Promise<void> | void;
+export type ReaderProps = PropsRuntime<'conversation.view'> & PropsLocale<'chat'> & PropsRenderSlots<'dsh-better-display.block' | OfficialSeat> & PropsStore<ReturnType<typeof createReaderStore>> & ReaderInjected;
+export type BlockRenderProps = Pick<ReaderProps, 'renderSlotChain' | 'loadImage' | 'fillComposer'> & {
+    official?: Pick<ReaderProps, 'renderSlot' | 'renderSlotChain' | 'officialImageLoader' | 'officialFileMentions' | 'officialPreviewFile' | 'officialHost' | 'openView'>;
+    cwd?: string;
+    openFile?: (path: string, options?: OpenFileOptions) => Promise<void> | void;
     revealFile?: (path: string) => Promise<void> | void;
     forkAt?: (seq: number) => void;
     /** Durable closing-message seq of this turn (turn-tail closing), used as the fork anchor. */

@@ -17,7 +17,7 @@
  * may add node types this renderer has no mapping for.
  */
 
-import { Fragment, createElement } from 'react'
+import { Fragment, createElement, useState } from 'react'
 import type { Key, ReactNode } from 'react'
 import clsx from 'clsx'
 import type * as Md from 'mdast'
@@ -27,6 +27,7 @@ import { CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import { renderTexToReact } from './katex.js'
 import { McpAppCodeBlock, StreamingMcpAppPlaceholder } from '../McpAppFrame.js'
 import { isMcpAppCodeBlock, extractMcpAppTitle, extractMcpAppHeight } from '../mcp-app.js'
+import type { MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PositionedBlock } from './incremental.js'
 import css from './MarkdownText.module.css'
 
@@ -136,6 +137,7 @@ export interface MarkdownRenderContext {
   readonly inBlockquote?: boolean
   /** Inline-code file mentions; absent wherever no opener vocabulary exists. */
   readonly fileMentions: MarkdownFileMentions | undefined
+  readonly pathImages?: MarkdownPathImages
   /** Inside an anchor's children: interactive mentions must not nest there. */
   readonly inLink?: boolean
   /** Reference targets visible to this pass. */
@@ -301,7 +303,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
     case 'linkReference':
       return renderLinkReference(node, key, context)
     case 'image':
-      return renderImage(node.url, node.alt ?? '', key)
+      return renderImage(node.url, node.alt ?? '', key, context)
     case 'imageReference':
       return renderImageReference(node, key, context)
     case 'footnoteReference':
@@ -515,17 +517,31 @@ function inlineCodeHttpUrl(value: string): string | undefined {
   }
 }
 
-function renderImage(url: string, alt: string, key: Key): ReactNode {
-  const imageSrc = remoteImageUrl(sanitizeUrl(normalizeUri(url)))
+function renderImage(url: string, alt: string, key: Key, context: MarkdownRenderContext): ReactNode {
+  // RC2 semantics, including the revalidation of a trusted vocabulary result.
+  const remote = remoteImageUrl(sanitizeUrl(normalizeUri(url)))
+  const rewritten = remote === undefined ? context.pathImages?.resolve(url) : undefined
+  let imageSrc = remote
+  if (rewritten !== undefined) {
+    try {
+      if (['http:', 'https:', 'blob:', 'data:'].includes(new URL(rewritten).protocol)) imageSrc = rewritten
+    } catch { /* A vocabulary result must be an absolute URL. */ }
+  }
   if (imageSrc === undefined) {
     return <span key={key} className={css.imageAlt}>{alt}</span>
   }
+  return <MarkdownImage key={`${key}:${imageSrc}`} src={imageSrc} alt={alt} destination={url} />
+}
+
+function MarkdownImage({ src, alt, destination }: { src: string; alt: string; destination: string }): ReactNode {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <span className={css.imageAlt}>{alt || destination}</span>
   return (
     <img
-      key={key}
       className={css.image}
-      src={imageSrc}
+      src={src}
       alt={alt}
+      onError={() => { setFailed(true) }}
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
@@ -563,7 +579,7 @@ function renderImageReference(
 ): ReactNode {
   const definition = context.targets.definitions.get(node.identifier.toUpperCase())
   if (definition === undefined) return `![${node.alt ?? ''}${referenceSuffix(node)}`
-  return renderImage(definition.url, node.alt ?? '', key)
+  return renderImage(definition.url, node.alt ?? '', key, context)
 }
 
 function renderFootnoteReference(

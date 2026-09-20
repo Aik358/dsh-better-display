@@ -162,7 +162,7 @@ function MessageClock({ time }: { time: number }) {
   return <time className={css.messageClock} dateTime={new Date(time).toISOString()}>{formatMessageClock(time)}</time>;
 }
 
-export function CopyAnswer({ blocks, onFork, metrics }: { blocks: readonly AssistantBlock[]; onFork?: () => void; metrics?: BlockRenderProps['metrics'] }) {
+export function CopyAnswer({ blocks, onFork, metrics, extraActions }: { blocks: readonly AssistantBlock[]; onFork?: () => void; metrics?: BlockRenderProps['metrics']; extraActions?: ReactNode }) {
   const { receipt, copy } = useCopyReceipt();
   const text = blocks.filter((block): block is Extract<AssistantBlock, { kind: 'text' }> => block.kind === 'text').map(block => block.text).join('\n\n');
   const endedAt = metrics?.endedAt;
@@ -174,6 +174,7 @@ export function CopyAnswer({ blocks, onFork, metrics }: { blocks: readonly Assis
         <CopyGlyph />
       </button>
     )}
+    {extraActions}
     {onFork && (
       <button
         type="button"

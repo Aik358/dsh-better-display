@@ -6,6 +6,7 @@ import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives';
 import { BlockBoundary, Blocks, contentBlocks, CopyAnswer, UserMessageActions } from './Blocks.js';
 import { ReasoningCard } from './ReasoningCard.js';
 import { ToolActivity, ToolMedia } from './ToolActivity.js';
+import { OfficialActions, OfficialNode, OfficialTail } from './OfficialContent.js';
 import { preparingLabel, readerFlow } from './tool-activity.js';
 import { Disclosure, ProcessFragment, RetiringContent, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
 import { StreamMotionContext } from './streaming.js';
@@ -181,7 +182,7 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
             // of its own; passing it would fork the whole session instead.
             const anchor = forkAnchorSeq([data.finalNode, { seq: render.forkSeq }]);
             return render.forkAt && anchor !== undefined ? () => render.forkAt!(anchor) : undefined;
-          })()} metrics={render.metrics} />
+          })()} metrics={render.metrics} extraActions={<OfficialActions official={render.official} messageId={data.finalNode?.messageId} />} />
         )}
       </article>
     </RetiringContent>;
@@ -226,6 +227,7 @@ const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, pr
   if (isNode(node, 'turn-max-tokens')) return <div className={css.notice}>已到达输出长度限制，回答尚未完整。</div>;
   if (isNode(node, 'model-retry')) return node.data.current.retryState === 'scheduled'
     ? <div className={css.notice} role="status">模型请求未成功，正在等待重试。详情保留在执行过程中。</div> : null;
+  if (isNode(node, 'command') && render.official) return <OfficialNode {...render} node={node} fallback={<JsonBlock label="命令记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />} />;
   if (isNode(node, 'command')) {
     if (node.data.outcome?.kind === 'error') return <div className={css.error} role="alert">
       <svg className={css.errorIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor">
@@ -245,10 +247,11 @@ const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, pr
   // host (it appears nowhere in the installed packages), so a slash command arrives
   // as 'command' above and is rendered there. Keeping the branch only made the file
   // look like it handled a case that cannot occur.
-  return <div className={css.unknown} data-reader-anchor>
+  return <OfficialNode {...render} node={node} fallback={<div className={css.unknown} data-reader-anchor>
     <p>此记录类型暂未接入阅读页：{node.kind}</p>
+    {render.official && <button type="button" className={css.textButton} onClick={() => render.official!.openView('chat', node.key)}>在对话中查看</button>}
     <JsonBlock label="查看原始记录" payload={node.data} truncatedLabel={truncatedJsonLabel} />
-  </div>;
+  </div>} />;
 });
 
 /**
@@ -505,10 +508,6 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
   const expanded = !autoFold || holdingSelection || processExpanded(expansionChoice, boundary);
   const [foldOpenByKey, setFoldOpenByKey] = useState<Record<string, boolean>>({});
   const deliverables = useMemo(() => getTurnDeliverables(turn, flow), [turn, flow]);
-  const fileMentions = useMemo(
-    () => deliverables.length > 0 && props.openFile ? createProducedFileMentions(deliverables, props.openFile) : undefined,
-    [deliverables, props.openFile],
-  );
   const tailData = useMemo(() => {
     for (const key of group.keys) {
       const n = nodes.get(key);
@@ -516,6 +515,21 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
     }
     return undefined;
   }, [group.keys, nodes]);
+  const tailOwner = useMemo(() => turn && tailData ? {
+    turn, seq: tailData.closing?.finalNode.seq ?? tailData.seq, openFile: props.openFile,
+  } : undefined, [turn, tailData, props.openFile]);
+  const fileMentions = useMemo(() => {
+    const official = tailOwner ? props.officialFileMentions(tailOwner) : undefined;
+    const reader = deliverables.length > 0 ? createProducedFileMentions(deliverables, props.openFile) : undefined;
+    return official || reader ? { resolve: (value: string) => official?.resolve(value) ?? reader?.resolve(value) } : undefined;
+  }, [tailOwner, props.officialFileMentions, deliverables, props.openFile]);
+  const official = useMemo(() => ({
+    renderSlot: props.renderSlot, renderSlotChain: props.renderSlotChain,
+    officialImageLoader: props.officialImageLoader, officialFileMentions: props.officialFileMentions,
+    officialPreviewFile: props.officialPreviewFile,
+    officialHost: props.officialHost, openView: props.openView,
+  }), [props.renderSlot, props.renderSlotChain, props.officialImageLoader, props.officialFileMentions, props.officialPreviewFile, props.officialHost, props.openView]);
+  const cwd = props.useSessions(state => state.byId[props.sessionId]?.cwd);
   const runMs = turn?.start && turn?.end ? Math.max(0, turn.end.time - turn.start.time) : undefined;
   const metrics = useMemo(() => ({
     usage: tailData?.tokenUsage,
@@ -545,7 +559,8 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
     forkSeq,
     fileMentions,
     metrics,
-    getToolView: props.getToolView,
+    official,
+    cwd,
   };
   const terminal = terminalLabel(boundary.reason);
   const hasTurnError = flow.some(item => item.kind === 'node' && nodes.get(item.nodeKey)?.kind === 'turn-error');
@@ -594,6 +609,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
       <GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />
     </div>}
     {showDeliverablesRow(boundary.status, deliverables) && <DeliverablesRow deliverables={deliverables} openFile={props.openFile} revealFile={props.revealFile} openMode={openMode} />}
+    {boundary.status === 'closed' && <BlockBoundary><OfficialTail official={official} owner={tailOwner} produced={deliverables} /></BlockBoundary>}
     {showTerminalNotice && <div className={css.notice} data-reader-terminal>{terminal}</div>}
   </section>;
 });
@@ -788,7 +804,7 @@ export function Reader(props: ReaderProps) {
 
   // ChatView publishes data-chat-flow="" on its column. Skins treat a
   // scrollport without that hook as inspect-only and hide [data-composer-seat].
-  return <StreamMotionContext.Provider value={streamMotion}><div ref={root} className={css.root} data-dsh-better-display="0.2.1" data-reader-wait-clock-version="input-v1" data-reader-wait-start={waitAnchor.time ?? undefined} data-motion={motion ? 'on' : 'off'} data-reader-glass={frostedGlass || undefined} data-reader-auto-fold={autoFold ? 'on' : 'off'}>
+  return <StreamMotionContext.Provider value={streamMotion}><div ref={root} className={css.root} data-reader-build="0.3.0-preview.1" data-dsh-better-display="0.3.0-preview.1" data-reader-wait-clock-version="input-v1" data-reader-wait-start={waitAnchor.time ?? undefined} data-motion={motion ? 'on' : 'off'} data-reader-glass={frostedGlass || undefined} data-reader-auto-fold={autoFold ? 'on' : 'off'}>
     <TimelineRail items={timelineItems} activeTurn={activeTurn} busyTurn={busyTurn} onNavigate={onNavigateTurn} />
     <div className={css.column} data-chat-flow="">
       <StickyLane kind="toolbar" className={css.toolbar}>

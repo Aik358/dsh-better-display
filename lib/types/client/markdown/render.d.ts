@@ -17,6 +17,7 @@
  */
 import type { ReactNode } from 'react';
 import type * as Md from 'mdast';
+import type { MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { PositionedBlock } from './incremental.js';
 /** Copy-button labels forwarded to fence CodeBlocks (this package is cordis-free, so copy arrives via props). */
 export interface MarkdownCodeLabels {
@@ -80,6 +81,7 @@ export interface MarkdownRenderContext {
     readonly inBlockquote?: boolean;
     /** Inline-code file mentions; absent wherever no opener vocabulary exists. */
     readonly fileMentions: MarkdownFileMentions | undefined;
+    readonly pathImages?: MarkdownPathImages;
     /** Inside an anchor's children: interactive mentions must not nest there. */
     readonly inLink?: boolean;
     /** Reference targets visible to this pass. */

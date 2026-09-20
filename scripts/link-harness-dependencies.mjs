@@ -17,6 +17,7 @@ const shared = {
   '@deepseek-ai/dsh-client-ui-renderer': 'packages/client/ui-renderer',
   '@deepseek-ai/dsh-client-ui-session': 'packages/client/ui-session',
   '@deepseek-ai/dsh-client-ui-slots': 'packages/client/ui-slots',
+  '@deepseek-ai/dsh-client-ui-tool': 'packages/client/ui-tool',
   '@deepseek-ai/dsh-attachment': 'packages/attachment/attachment',
   '@deepseek-ai/dsh-session': 'packages/core/session',
   '@deepseek-ai/dsh-util-workspace-path': 'packages/util/workspace-path',

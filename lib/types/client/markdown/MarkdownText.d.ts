@@ -10,6 +10,7 @@
  * other side of the freeze boundary renders literally until the settled
  * full parse self-heals it.
  */
+import type { MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownRenderContext } from './render.js';
 export type { MarkdownCodeLabels, MarkdownFileMentions } from './render.js';
 /**
@@ -28,11 +29,12 @@ export type { MarkdownCodeLabels, MarkdownFileMentions } from './render.js';
  * relative links, and unsafe protocols are disabled, while absolute HTTP(S)
  * images render directly.
  */
-export declare const MarkdownText: import("react").MemoExoticComponent<({ text, streaming, codeLabels, fileMentions, renderText, renderAtom }: {
+export declare const MarkdownText: import("react").MemoExoticComponent<({ text, streaming, codeLabels, fileMentions, pathImages, renderText, renderAtom }: {
     text: string;
     streaming?: boolean;
     codeLabels?: MarkdownCodeLabels | undefined;
     fileMentions?: MarkdownFileMentions | undefined;
+    pathImages?: MarkdownPathImages | undefined;
     renderText?: MarkdownRenderContext["renderText"];
     renderAtom?: MarkdownRenderContext["renderAtom"];
 }) => import("react").JSX.Element>;
