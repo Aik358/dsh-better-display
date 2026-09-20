@@ -125,9 +125,13 @@
 .diffRemoved { color: var(--dsw-alias-state-error-primary, #d1483c); }
 /* A digest row is [label][counts]; the counts are pushed to the right edge so
    every row's numbers line up in one column instead of drifting with the label. */
-.summaryRow { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.summaryRow { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; flex-wrap: nowrap; }
 .summaryRow > .diffStatRoot { flex: none; margin-left: auto; }
-.summaryRow > :first-child { min-width: 0; }
+/* Every direct child must be allowed to shrink, not just the first. A digest is
+   one line by design, so the row has to ellipsise rather than wrap; leaving a
+   later child at its intrinsic width pushed the counts off the row and broke
+   the label mid-phrase. */
+.summaryRow > * { min-width: 0; }
 .diffStatRoot { position: relative; flex: none; }
 /* Transparent at rest like the path and count chips beside it; the outline and
    surface appear on hover or keyboard focus, so the row reads as text until the
