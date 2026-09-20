@@ -14,7 +14,7 @@ import { diffBlockLabels, jsonTreeLabels, readBlockLabels, searchBlockLabels, te
 import css from './Reader.module.css';
 
 const LABEL: Record<ToolPhase, string> = { preparing: '输入生成中', running: '执行中', returned: '已返回', succeeded: '已完成', failed: '失败', interrupted: '已中断' };
-const ICONS = { write: IconEditOutline16, read: IconBrowseOutline16, terminal: IconApiOutline14, search: IconSearchOutline16, web: IconSearchOutline16, other: IconSparkle16 } satisfies Record<ToolCategory, unknown>;
+const ICONS = { write: IconEditOutline16, read: IconBrowseOutline16, terminal: IconApiOutline14, search: IconSearchOutline16, web: IconSearchOutline16, code: IconApiOutline14, other: IconSparkle16 } satisfies Record<ToolCategory, unknown>;
 const number = new Intl.NumberFormat('zh-CN');
 const language = (path: string | undefined) => path?.split('.').at(-1);
 const duration = (ms: number) => ms < 1000 ? `${Math.round(ms)} 毫秒` : `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} 秒`;
@@ -154,6 +154,19 @@ function ResultView({ entry, model, phase, ...render }: BlockRenderProps & { ent
     {generatedInput(model.content, model.target, false)}
   </>;
   const content: ToolResultNode['content'] = block.content;
+  // A code interpreter's product is its result, not prose. Without this branch
+  // the output fell through to the generic document path below, which emits it
+  // as reader answer text — so a run_code card sat in the transcript outside
+  // every fold, the exact block the reader wanted to be able to close.
+  if (model.category === 'code') {
+    const output = content.filter(item => item.type === 'text').map(item => item.text).join('\n');
+    const facts = executionFacts(block);
+    if (output.trim()) return <div data-reader-tool-code>
+      <TerminalBlock command={model.command ?? model.name} cwd={model.cwd} output={output}
+        exitCode={facts.exitCode} signal={facts.signal} maxLines={18} labels={terminalBlockLabels} />
+    </div>;
+    return <p className={css.toolDetailNote}>代码已执行，没有可展示的输出。</p>;
+  }
   if (content.some(item => item.type === 'text')) return <div className={css.toolDocument}><Blocks {...render} blocks={contentBlocks(content).filter(item => item.kind === 'text')} source="tool" /></div>;
   if (content.length) return <p className={css.toolDetailNote}>图片或扩展内容已在对话中单独展示。</p>;
   return <p className={css.toolDetailNote}>工具没有返回可展示的内容。</p>;

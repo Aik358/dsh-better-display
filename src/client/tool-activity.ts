@@ -5,7 +5,7 @@ import type { ReaderGroup } from './projection.js';
 
 export type ToolDraft = Extract<AssistantBlock, { kind: 'tool-call' }>;
 export type ToolPhase = 'preparing' | 'running' | 'returned' | 'succeeded' | 'failed' | 'interrupted';
-export type ToolCategory = 'write' | 'read' | 'terminal' | 'search' | 'web' | 'other';
+export type ToolCategory = 'write' | 'read' | 'terminal' | 'search' | 'web' | 'code' | 'other';
 export interface ToolActivityEntry {
   kind: 'tool'; key: string; callId: string; step: number; order: number;
   draft?: ToolDraft; block?: ToolCallBlock;
@@ -275,12 +275,19 @@ export function activitySummary(entry: Pick<ToolActivityEntry, 'block' | 'draft'
     : /^(read|read_file)$/.test(name) ? 'read'
     : /^(bash|shell|terminal|terminal_send|exec_command|pwsh)$/.test(name) ? 'terminal'
     : /^(grep|glob|find|search)$/.test(name) ? 'search'
-    : /^(web_search|web_fetch|web_open)$/.test(name) ? 'web' : 'other';
+    : /^(web_search|web_fetch|web_open)$/.test(name) ? 'web'
+    // Code interpreters: no file, no shell, no query — the call is a program.
+    // Without this branch `run_code` fell through to `other`, which has no
+    // renderer of its own, so its result text was emitted as ordinary prose
+    // and stayed outside every fold.
+    : /^(run_code|execute_code|code_interpreter|python|node|eval|repl)$/.test(name) ? 'code'
+    : 'other';
   const title = category === 'write' ? `${name === 'write' ? '写入' : '修改'}${file ? ` ${file}` : name === 'apply_patch' ? '代码补丁' : '文件'}`
     : category === 'read' ? `读取${file ? ` ${file}` : '文件'}`
     : category === 'terminal' ? description || '运行命令'
     : category === 'search' ? name === 'glob' ? '查找文件' : '搜索内容'
     : category === 'web' ? name === 'web_search' ? '搜索网页' : '读取网页'
+    : category === 'code' ? (description || '运行代码')
     : name;
   return { name, raw, args, category, title, target: target ?? command ?? stringValue(args, 'query', 'pattern', 'url'), command,
     cwd: stringValue(args, 'workdir', 'cwd'), content: stringValue(args, 'content', 'new_string', 'newText', 'file_text') };
