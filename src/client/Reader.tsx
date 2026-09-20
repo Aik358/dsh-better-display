@@ -151,8 +151,11 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
   const data = node.data;
   const parts = assistantSegments(data.blocks);
   const earlier = isEarlierNarration(data, boundary);
-  const hasToolCalls = data.blocks.some(block => block.kind === 'tool-call');
-  const isProcessStep = earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
+  // \`hasToolCalls\` is deliberately absent: it is a whole-step fact, and a step
+  // that both talks and calls a tool would then push its *prose* into the fold
+  // — the reader saw a finished turn as nothing but tool rows. Whether a part
+  // is process is already decided per part by \`assistantSegments\`.
+  const isProcessStep = earlier || folded || (boundary.latestStep > 0 && data.step < boundary.latestStep);
   const body = data.blocks.filter(block => block.kind !== 'reasoning' && block.kind !== 'tool-call');
   const visible = partStart === undefined ? parts : parts.filter(part => part.start === partStart);
   return <>{visible.map(part => {
@@ -165,12 +168,17 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
           holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </ReasoningCard>
     </ProcessFragment>
-    : isProcessStep ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
+    // A part that carries prose for the reader is routed to the answer branch
+    // even when the step it sits in reads as process. "Earlier narration" used
+    // to be dropped into the collapsed commentary fragment, which is why a
+    // finished turn could read as nothing but tool rows: the words addressed to
+    // the user were inside the shut disclosure.
+    : isProcessStep && !hasVisibleBody(part.blocks) ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
       <article className={css.processCommentary}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </article>
     </ProcessFragment>
-    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
+    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || !folded}>
       <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
         {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
