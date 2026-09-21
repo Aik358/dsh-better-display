@@ -20,6 +20,7 @@ export interface ReaderState {
 }
 type ReaderActions = {
     setExpanded: (draft: ReaderState, key: string, value: boolean) => void;
+    resetExpanded: (draft: ReaderState) => void;
     setMotion: (draft: ReaderState, value: boolean) => void;
     setAutoFold: (draft: ReaderState, value: boolean) => void;
     setDeliverableOpenMode: (draft: ReaderState, value: DeliverableOpenMode) => void;

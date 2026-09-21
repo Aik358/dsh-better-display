@@ -49,9 +49,12 @@ node scripts/link-harness-dependencies.mjs "$DSHX_HARNESS"
 npm run build
 npm test
 npm run test:official
+npm run test:auto-fold
 ```
 
 `test:official` 使用测试目标里的真实官方 SlotRegistry、React renderer、反馈插件、ReadRow 和 Deliverables，只有远程业务服务使用内存替身。测试私有源码仅用于验证，不进入交付 bundle。浏览器验证使用本机固定的 Codex Playwright runtime，不附着用户会话。
+
+`test:auto-fold` 使用真实 Reader 和独立的全局、会话 store，验证关闭后阅读再开启、此前步骤、设置同步、文本选择及连续切换；分别覆盖普通动画和减少动态效果。
 
 `build` 先检查兼容基线。Harness 版本、敏感接口、尚未收敛的官方实现或相关注册清单改变时，构建明确要求审查。审查差异并通过功能与视觉测试后，才可运行 `check-harness-compat.mjs --record` 记录新基线。记录本身不构成兼容证明。
 

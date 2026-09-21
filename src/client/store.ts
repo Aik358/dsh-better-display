@@ -27,6 +27,7 @@ export interface ReaderState {
 }
 type ReaderActions = {
   setExpanded: (draft: ReaderState, key: string, value: boolean) => void;
+  resetExpanded: (draft: ReaderState) => void;
   setMotion: (draft: ReaderState, value: boolean) => void;
   setAutoFold: (draft: ReaderState, value: boolean) => void;
   setDeliverableOpenMode: (draft: ReaderState, value: DeliverableOpenMode) => void;
@@ -54,6 +55,7 @@ export function createReaderStore(): EngineStoreHandle<ReaderState, ReaderAction
     persist: 'dsh.reader.v1',
     actions: {
       setExpanded: (draft, key: string, value: boolean) => { draft.expanded[key] = value; },
+      resetExpanded: draft => { draft.expanded = {}; },
       setMotion: (draft, value: boolean) => { draft.motion = value; },
       setAutoFold: (draft, value: boolean) => {
         applyFoldIntensity(draft, value

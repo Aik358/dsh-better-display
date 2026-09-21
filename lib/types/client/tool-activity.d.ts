@@ -5,7 +5,7 @@ export type ToolDraft = Extract<AssistantBlock, {
     kind: 'tool-call';
 }>;
 export type ToolPhase = 'preparing' | 'running' | 'returned' | 'succeeded' | 'failed' | 'interrupted';
-export type ToolCategory = 'write' | 'read' | 'terminal' | 'search' | 'web' | 'other';
+export type ToolCategory = 'write' | 'read' | 'terminal' | 'search' | 'web' | 'code' | 'other';
 export interface ToolActivityEntry {
     kind: 'tool';
     key: string;

@@ -36,6 +36,7 @@
     "build": "node scripts/check-harness-compat.mjs && tsc -p tsconfig.json && tsdown",
     "check:harness": "node scripts/check-harness-compat.mjs",
     "test:official": "node scripts/verify-official-bridge.mjs",
+    "test:auto-fold": "node scripts/verify-auto-fold.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx/esm --test tests/*.test.ts",
     "link:harness": "node scripts/link-harness-dependencies.mjs"
