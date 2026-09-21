@@ -100,9 +100,13 @@
 .chevron { flex: none; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; transition: transform 260ms cubic-bezier(.22,1,.36,1); }
 .chevron[data-open=true] { transform: rotate(90deg); }
 .disclosureBody { overflow: hidden; height: 0; transform-origin: top center; will-change: height, opacity, transform; }
-.processContents { display: flow-root; border-left: 1px solid var(--dsw-alias-border-l2); padding: 3px 0 2px 17px; margin: 0 0 0 6px; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; }
+/* One rail geometry for every nested lane. These three rules used to sit at
+   6px / 24px / 6px with 1px, 1px and 2px rails, so the vertical guides stepped
+   in and out down the page. They now share --reader-rail: same left edge, same
+   rail width, same gutter, so a column of nested rows reads as one line. */
+.processContents { display: flow-root; border-left: 1px solid var(--dsw-alias-border-l2); padding: 3px 0 2px var(--reader-gutter, 16px); margin: 0 0 0 var(--reader-rail, 6px); color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; }
 .processContents > :last-child { margin-bottom: 0; }
-.processCommentary { color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; margin: 4px 0 8px 6px; padding-left: 12px; border-left: 2px solid var(--dsw-alias-border-l2); }
+.processCommentary { color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; margin: 4px 0 8px var(--reader-rail, 6px); padding-left: var(--reader-gutter, 16px); border-left: 1px solid var(--dsw-alias-border-l2); }
 .processFrame { min-width: 0; }
 .toolActivity { min-width: 0; color: var(--dsw-alias-label-secondary); }
 .nativeToolRow { min-width: 0; }
@@ -297,8 +301,9 @@
 .systemPrompt { margin: 0; max-height: 320px; padding: 12px; overflow: auto; border-radius: 8px; background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-primary); font: 12px/20px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .commandInput { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .toolReceipt .blocks, .toolDocument .blocks { font-size: 13px; line-height: 22px; }
-.toolChildren { margin: 0 14px 12px 24px; padding-left: 12px; border-left: 1px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; gap: 9px; }
-@container (max-width: 420px) { .toolHeading { gap: 7px; padding: 11px 10px 6px; grid-template-columns: 16px minmax(0, 1fr) auto; } .toolHeadingState { gap: 4px; } .toolLedger { padding-left: 33px; padding-right: 10px; } .toolPanel { padding: 10px; } .toolChildren { margin-left: 12px; padding-left: 8px; } }
+.toolChildren { margin: 0 14px 12px var(--reader-rail, 6px); padding-left: var(--reader-gutter, 16px); border-left: 1px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; gap: 9px; }
+@container (max-width: 420px) { .toolHeading { gap: 7px; padding: 11px 10px 6px; grid-template-columns: 16px minmax(0, 1fr) auto; } .toolHeadingState { gap: 4px; } .toolLedger { padding-left: 33px; padding-right: 10px; } .toolPanel { padding: 10px; } /* .toolChildren keeps the shared rail here too: a different left edge under a
+     narrow container is what made nested rows read as misplaced lines. */ }
 @media (pointer: coarse) { .toolTabs > button { min-height: 44px; } }
 /* Transitions.dev — Reasoning stream (user-supplied). Transform the one real
    transcript; hand the painted offset to native scrolling for manual reading. */
