@@ -5,7 +5,7 @@
 Prefer npm (version-pinable):
 
 ```sh
-dsh plugin --profile web add dsh-better-display@0.2.1
+dsh plugin --profile web add dsh-better-display@0.3.0
 ```
 
 Or latest:
@@ -30,11 +30,13 @@ A ````mcp-app` fence in the final answer mounts as an interactive card in the re
 
 Targets DeepSeek Harness **0.1.5-rc.2**. Display only. It does not change Agent execution, the SDK, or credentials. Node.js `^22.19.0 || >=24`. New sessions default to reading.
 
+**0.3.0** keeps the existing reading layout, folding, and motion while using official feedback, tool details, file cards, and file links. It also fixes process content staying expanded after auto-folding is re-enabled. See the [official integration notes](docs/official-rendering-bridge.md) for coverage and upgrade checks.
+
 From a local checkout or tarball:
 
 ```sh
 dsh plugin --profile web add ./dsh-better-display
-dsh plugin --profile web add ./dsh-better-display-0.2.1.tgz
+dsh plugin --profile web add ./dsh-better-display-0.3.0.tgz
 ```
 
 `dsh.bundle` is captured at Host boot. Do not also insert the same row by hand in the profile `cordis.patch.yml`, or it will mount twice.

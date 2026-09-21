@@ -5,7 +5,7 @@
 推荐用 npm（可钉版本）：
 
 ```sh
-dsh plugin --profile web add dsh-better-display@0.2.1
+dsh plugin --profile web add dsh-better-display@0.3.0
 ```
 
 也可以装 latest：
@@ -30,11 +30,13 @@ PATH 上要有官方 `dsh`（没有就用 `npx @deepseek-ai/dsh`）和 **pnpm**�
 
 面向 DeepSeek Harness **0.1.5-rc.2**。只改展示，不改 Agent 执行、SDK 或模型凭据。Node.js `^22.19.0 || >=24`。新会话默认进阅读。
 
+**0.3.0** 保留现有阅读布局、折叠和动效，接入官方反馈、工具详情、文件卡片及文件链接；并修复重新开启自动折叠后仍保持展开的问题。接入范围和升级检查见 [官方能力接入说明](docs/official-rendering-bridge.md)。
+
 本地目录或 tarball：
 
 ```sh
 dsh plugin --profile web add ./dsh-better-display
-dsh plugin --profile web add ./dsh-better-display-0.2.1.tgz
+dsh plugin --profile web add ./dsh-better-display-0.3.0.tgz
 ```
 
 `dsh.bundle` 是开机捕获的。不要再往 profile 的 `cordis.patch.yml` 手写同一条 insert，会重复挂载。
