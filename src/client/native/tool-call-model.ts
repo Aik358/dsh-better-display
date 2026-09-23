@@ -107,7 +107,7 @@ export interface ToolRowModel {
  */
 export function resultText(node: ToolResultNode): string {
   const parts: string[] = []
-  for (const block of node.content) {
+  for (const block of Array.isArray(node.content) ? node.content : []) {
     if (block.type === 'text') parts.push(block.text)
     else parts.push(JSON.stringify(block, null, 2))
   }
@@ -217,7 +217,9 @@ function deriveBody(variant: ToolRowVariant, argsRaw: string): string | null {
 export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: string, home?: string): ToolRowModel {
   const variant = classifyTool(toolName)
   const done = 'kind' in block
-  const argsRaw = (done ? block.call?.argsRaw : block.argsRaw) ?? ''
+  // A preparing call on 0.1.7 carries no `argsRaw` at all; it reads as empty input.
+  const pending = (block as { argsRaw?: unknown }).argsRaw
+  const argsRaw = done ? block.call?.argsRaw ?? '' : typeof pending === 'string' ? pending : ''
   const state: ToolRowState = !done ? 'running'
     : block.error?.code === 'interrupted' ? 'stopped'
       : block.isError ? 'error' : 'ok'
@@ -234,7 +236,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   // call with blank content has nothing to expand, and a blank first line
   // would erase the collapsed error row's summary slot.
   const output = done ? (resultText(block) || null) : null
-  const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
+  const errorSummary = state === 'error' && output ? firstLine(output) : null
   return {
     variant,
     title: toolTitle ?? VARIANT_TITLES[variant],

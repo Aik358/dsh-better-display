@@ -1,10 +1,25 @@
 import { useState } from 'react'
 import type { ContextMessageNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { DisclosureRow, IconBrowseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconRead } from '../icons.js'
 import { ReferenceIcon } from './ReferenceIcon.js'
 import { contextBody } from './ContextBody.js'
 import css from './ContextInjectionRow.module.css'
+
+/**
+ * The role/name projection this row reads, declared structurally on purpose.
+ *
+ * The field was renamed and its type moved with it between host generations:
+ * the 0.1.7 line projects `producer: ContextProducerView`, the earlier line
+ * projected `provenance: ContextProvenanceView`. Reading the shape the row
+ * needs keeps one component rendering against either, including a bundle built
+ * from types of a generation the running host has since replaced.
+ */
+interface ProducerView {
+  role: 'inject' | 'recall'
+  label: string | null
+}
 
 /** Props for the logged non-user message presentation. */
 export interface ContextInjectionRowProps {
@@ -13,14 +28,14 @@ export interface ContextInjectionRowProps {
   /**
    * Role and producer name projected from the durable source.
    *
-   * Host generations disagree on the field name: newer builds project
-   * `provenance`, the 0.1.6-alpha generations project `producer`. Both are
+   * Host generations disagree on the field name: the 0.1.7 line projects
+   * `producer`, the 0.1.6-alpha generations projected `provenance`. Both are
    * optional here and resolved below, so the row renders on either host instead
    * of throwing on `undefined.role` and degrading its whole block boundary.
    */
-  provenance?: ContextMessageNode['provenance'] | null
-  /** Alpha-generation spelling of {@link provenance}. */
-  producer?: ContextMessageNode['provenance'] | null
+  producer?: ProducerView | null
+  /** Alpha-generation spelling of {@link producer}. */
+  provenance?: ProducerView | null
   /** Producer-declared information form; null renders the opaque body. */
   form: ContextMessageNode['form']
   /** The owning view's locale seat, passed down as a plain prop. */
@@ -38,11 +53,11 @@ export interface ContextInjectionRowProps {
  * @param props - Durable content, its projected producer role/name and form, and the locale seat.
  * @returns A collapsed context row with a bounded, form-specific body.
  */
-export function ContextInjectionRow({ content, source, provenance, producer, form, t }: ContextInjectionRowProps) {
+export function ContextInjectionRow({ content, source, producer, provenance, form, t }: ContextInjectionRowProps) {
   const [open, setOpen] = useState(false)
   // Two host generations, one component. A row whose projection is absent
   // entirely still renders: the marker falls back to a plain injection.
-  const view = provenance ?? producer ?? { role: 'inject' as const, label: null }
+  const view: ProducerView = producer ?? provenance ?? { role: 'inject', label: null }
   // Resolved rather than declared: a form whose fields are unreadable renders
   // the opaque body, and the marker must say what the row actually shows.
   const { rendered, summary, body } = contextBody(form, { content, source, t })
@@ -52,7 +67,7 @@ export function ContextInjectionRow({ content, source, provenance, producer, for
       className={css.root}
       icon={view.role === 'recall'
         ? <span data-context-recall-icon><ReferenceIcon kind="session" /></span>
-        : <IconBrowseOutline16 size={14} />}
+        : <IconRead size={14} />}
       chevronClassName={css.chevron}
       title={t(view.role === 'recall' ? 'message.contextRecall' : 'message.contextInjection')}
       collapsedContent={view.label === null ? undefined : (

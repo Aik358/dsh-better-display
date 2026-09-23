@@ -91,17 +91,31 @@ export function inputFields(raw: string): Record<string, unknown> {
   return fields;
 }
 
+/**
+ * Arguments as the wire sent them, or '' when this host build does not carry
+ * them yet.
+ *
+ * The property is not present on every generation's call union (0.1.7 splits a
+ * call into preparing/started shapes and only the started one has `argsRaw`),
+ * so an absent value has to read as empty input rather than as `undefined`
+ * flowing into a string operation downstream.
+ */
+function callArgs(block: unknown): string {
+  const args = (block as { argsRaw?: unknown } | undefined)?.argsRaw;
+  return typeof args === 'string' ? args : '';
+}
+
 export function toolIdentity(entry: Pick<ToolActivityEntry, 'block' | 'draft'>) {
   const block = entry.block;
   return {
     name: block ? 'kind' in block ? block.call?.name ?? entry.draft?.name ?? '工具调用' : block.name : entry.draft?.name ?? '工具调用',
-    raw: block ? 'kind' in block ? block.call?.argsRaw ?? entry.draft?.argsRaw ?? '' : block.argsRaw : entry.draft?.argsRaw ?? '',
+    raw: block ? 'kind' in block ? block.call?.argsRaw ?? entry.draft?.argsRaw ?? '' : callArgs(block) : entry.draft?.argsRaw ?? '',
   };
 }
 
 /** Name and raw arguments of any call block, whether it has landed or is pending. */
 function childIdentity(block: ToolCallBlock): { name?: string; raw: string } {
-  if (!block || !('kind' in block)) return { name: block?.name, raw: block?.argsRaw ?? '' };
+  if (!block || !('kind' in block)) return { name: block?.name, raw: callArgs(block) };
   return { name: block.call?.name, raw: block.call?.argsRaw ?? '' };
 }
 
@@ -109,7 +123,8 @@ export function executionFacts(block: ToolCallBlock | undefined): { exitCode?: n
   if (!block || !('kind' in block)) return {};
   const meta = objectValue(block.meta);
   const code = meta?.exitCode ?? meta?.exit_code;
-  const text = block.content.length === 1 && block.content[0]?.type === 'text' ? block.content[0].text : '';
+  const content = Array.isArray(block.content) ? block.content : [];
+  const text = content.length === 1 && content[0]?.type === 'text' ? content[0].text : '';
   const exit = /\n\[exit code: (\d+)\]$/.exec(text);
   const signal = /\n\[killed by signal: ([^\]\n]+)\]$/.exec(text);
   const parsedCode = exit?.[1] === undefined ? undefined : Number(exit[1]);
@@ -259,7 +274,7 @@ export function activityPhase(entry: Pick<ToolActivityEntry, 'block' | 'draft'>,
   if (entry.block.error?.code === 'ABORTED' || entry.block.error?.code === 'interrupted') return 'interrupted';
   const facts = executionFacts(entry.block);
   if (entry.block.isError || facts.signal || (facts.exitCode !== undefined && facts.exitCode !== 0)
-    || entry.block.subCalls.some(block => activityPhase({ block }, turnClosed) === 'failed')) return 'failed';
+    || (Array.isArray(entry.block.subCalls) && entry.block.subCalls.some(block => activityPhase({ block }, turnClosed) === 'failed'))) return 'failed';
   if (facts.exitCode === 0) return 'succeeded';
   return 'returned';
 }

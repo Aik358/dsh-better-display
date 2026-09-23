@@ -20,6 +20,7 @@ import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
+import type { TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import { presentLiveTurn, segmentLiveTurn } from './live-turn.js';
 import type { LiveStep } from './live-turn.js';
 import { frostedGlassOf } from './fold-intensity.js';
@@ -33,6 +34,67 @@ import { markdownLabels, truncatedJsonLabel } from './primitive-labels.js';
 
 function isNode<K extends ChatNodeKind>(node: ChatConversationViewNode, kind: K): node is ChatNode<K> {
   return node.kind === kind;
+}
+
+/**
+ * Provider-call timing as the 0.1.7 line records it, per assistant message.
+ *
+ * Declared locally because the chat types this checkout installs expose the
+ * earlier turn-tail counters instead, and the two seats never coexist on one
+ * host. An absent record simply produces no timing readout.
+ */
+interface TimingView {
+  stepStartTime?: number | null
+  firstTokenTime?: number | null
+  completedTime?: number
+}
+
+/**
+ * First-token latency and generation rate for one turn.
+ *
+ * The 0.1.7 line stopped projecting `ttftMs` / `tokensPerSecond` onto the turn
+ * tail and publishes a per-assistant `timing` record instead, so latency comes
+ * from whichever seat this host fills. The rate is an ESTIMATE: no per-step
+ * token count is available here, so the step's own output characters are
+ * converted at the usual ~4 characters per token, and the popover states as
+ * much rather than implying provider accounting.
+ * @param tailData - the turn-tail row of this turn, when it is in the window.
+ * @param turn - the turn being read, for its step records and start time.
+ * @returns latency in ms and estimated tokens per second; either may be absent.
+ */
+function liveRates(
+  tailData: unknown,
+  turn: TurnLocation | undefined,
+): { ttftMs?: number; tokensPerSecond?: number } {
+  const rates = tailData as { ttftMs?: unknown; tokensPerSecond?: unknown } | undefined;
+  const directTtft = typeof rates?.ttftMs === 'number' ? rates.ttftMs : undefined;
+  const directRate = typeof rates?.tokensPerSecond === 'number' ? rates.tokensPerSecond : undefined;
+  if (directTtft !== undefined || directRate !== undefined) {
+    return { ttftMs: directTtft, tokensPerSecond: directRate };
+  }
+  let first: number | undefined;
+  let last: number | undefined;
+  let outputChars = 0;
+  for (const step of turn?.steps ?? []) {
+    const data = step.data.get('assistant-step') as
+      | { timing?: TimingView; blocks?: readonly { kind?: string; text?: string }[] }
+      | undefined;
+    const timing = data?.timing;
+    if (!timing) continue;
+    if (first === undefined && timing.stepStartTime != null && timing.firstTokenTime != null) {
+      first = Math.max(0, timing.firstTokenTime - timing.stepStartTime);
+    }
+    if (typeof timing.completedTime === 'number') last = Math.max(last ?? timing.completedTime, timing.completedTime);
+    for (const block of data?.blocks ?? []) {
+      if (block.kind === 'text' || block.kind === 'reasoning') outputChars += (block.text ?? '').length;
+    }
+  }
+  const spanMs = last !== undefined && turn?.start ? last - turn.start.time : undefined;
+  if (first === undefined && !(spanMs !== undefined && spanMs > 0)) return {};
+  return {
+    ttftMs: first,
+    tokensPerSecond: spanMs !== undefined && spanMs > 0 && outputChars > 0 ? (outputChars / 4) / (spanMs / 1000) : undefined,
+  };
 }
 
 function cleanErrorMessage(raw: string | undefined): string {
@@ -535,13 +597,16 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
   }), [props.renderSlot, props.renderSlotChain, props.officialImageLoader, props.officialFileMentions, props.officialPreviewFile, props.officialHost, props.openView]);
   const cwd = props.useSessions(state => state.byId[props.sessionId]?.cwd);
   const runMs = turn?.start && turn?.end ? Math.max(0, turn.end.time - turn.start.time) : undefined;
-  const metrics = useMemo(() => ({
-    usage: tailData?.tokenUsage,
-    runMs,
-    tokensPerSecond: tailData?.tokensPerSecond,
-    ttftMs: tailData?.ttftMs,
-    endedAt: tailData?.closing?.time ?? turn?.end?.time,
-  }), [tailData, runMs, turn?.end?.time]);
+  const metrics = useMemo(() => {
+    const rates = liveRates(tailData, turn);
+    return {
+      usage: tailData?.tokenUsage,
+      runMs,
+      tokensPerSecond: rates.tokensPerSecond,
+      ttftMs: rates.ttftMs,
+      endedAt: tailData?.closing?.time ?? turn?.end?.time,
+    };
+  }, [tailData, runMs, turn?.end?.time, turn?.steps, turn?.start?.time]);
   const forkSeq = forkAnchorSeq([tailData?.closing?.finalNode]);
   const presentation = useMemo(() => {
     // ChatNodeStore exposes live keyed readers. Materialize this turn instead of
